@@ -78,7 +78,7 @@ public class HttpTriggerFunctions {
 
         // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
         var requestBytes = Base64.getDecoder().decode(request.getBody());
-        context.getLogger().info("Request length (number of bytes): " + String.valueOf(requestBytes.length));
+        context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
         try {
             final var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
