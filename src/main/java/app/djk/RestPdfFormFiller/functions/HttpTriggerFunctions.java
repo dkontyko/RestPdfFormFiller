@@ -59,9 +59,14 @@ public class HttpTriggerFunctions {
      */
 
     /**
-     * Azure Function that receives a Base64-encoded PDF file and returns the pretty-printed XFA form field data.
-     * @param request Azure Function parameter that expects a Base64-encoded binary PDF.
-     * @param context Azure Function parameter.
+     * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
+     *
+     * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
+     * set to either <code>json</code> or <code>xml</code> for the return format of the form data.
+     * It also requires the request body to have the binary PDF file encoded in base64.
+     *
+     * @param request Azure Function parameter representing the HTTP request.
+     * @param context Azure Function parameter representing the execution context.
      * @return An HTTP Response indicating the result of the request. If successful, the body will contain the
      * XFA form field data.
      */
@@ -80,6 +85,7 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
         }
 
+        // Desired format of the returned form data.
         final var returnDataFormat = request.getQueryParameters().get("format");
 
         if(!(Objects.equals(returnDataFormat, "json")) && !(Objects.equals(returnDataFormat, "xml"))) {
@@ -103,14 +109,15 @@ public class HttpTriggerFunctions {
             context.getLogger().log(Level.SEVERE, e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
 
-        } catch (IOException e) { // Catching errors from the RestPdfApi methods.
+        } catch (IOException e) {
             context.getLogger().log(Level.SEVERE, "Unable to create InputStream.");
             context.getLogger().log(Level.SEVERE, e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
 
         } catch (TransformerException e) {
+            context.getLogger().log(Level.SEVERE, "DOM Transform failed.");
             context.getLogger().log(Level.SEVERE, e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("DOM Transform failed.").build();
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
 }
