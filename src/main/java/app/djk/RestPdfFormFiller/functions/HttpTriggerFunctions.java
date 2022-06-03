@@ -26,6 +26,7 @@ import java.util.logging.Level;
  */
 public class HttpTriggerFunctions {
 
+    /* Gets a user-supplied URL, let's not do that.
     @FunctionName("GetBlank4187Data")
     public HttpResponseMessage run(
             @HttpTrigger(
@@ -55,6 +56,7 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("DOM Transform failed.").build();
         }
     }
+     */
 
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the pretty-printed XFA form field data.
