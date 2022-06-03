@@ -1,10 +1,10 @@
 # RestPdfFormFiller
 
-![Azure Function Deploy (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller(dev).yml/badge.svg?branch=dev)
+![Azure Function Deploy (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml/badge.svg)
 
-![CodeQL (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg?branch=dev)
+![CodeQL (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg)
 
-![Java CI with Maven (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg?branch=dev)
+![Java CI with Maven (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg)
 
 # Project Structure
 ## HttpTriggerFunctions
