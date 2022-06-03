@@ -1,6 +1,7 @@
 package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.HttpMethod;
 import com.microsoft.azure.functions.HttpRequestMessage;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Base64;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.logging.Level;
 
@@ -24,6 +26,7 @@ import java.util.logging.Level;
  */
 public class HttpTriggerFunctions {
 
+    /* Gets a user-supplied URL, let's not do that.
     @FunctionName("GetBlank4187Data")
     public HttpResponseMessage run(
             @HttpTrigger(
@@ -53,16 +56,22 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("DOM Transform failed.").build();
         }
     }
+     */
 
     /**
-     * Azure Function that receives a Base64-encoded PDF file and returns the pretty-printed XFA form field data.
-     * @param request Azure Function parameter that expects a Base64-encoded binary PDF.
-     * @param context Azure Function parameter.
+     * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
+     *
+     * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
+     * set to either <code>json</code> or <code>xml</code> for the return format of the form data.
+     * It also requires the request body to have the binary PDF file encoded in base64.
+     *
+     * @param request Azure Function parameter representing the HTTP request.
+     * @param context Azure Function parameter representing the execution context.
      * @return An HTTP Response indicating the result of the request. If successful, the body will contain the
      * XFA form field data.
      */
-    @FunctionName("Get4187Data")
-    public HttpResponseMessage get4187Data(
+    @FunctionName("GetXfaData")
+    public HttpResponseMessage getXfaData(
             @HttpTrigger(
                     name = "req",
                     methods = {HttpMethod.POST},
@@ -76,20 +85,39 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
         }
 
+        // Desired format of the returned form data.
+        final var returnDataFormat = request.getQueryParameters().get("format");
+
+        if(!(Objects.equals(returnDataFormat, "json")) && !(Objects.equals(returnDataFormat, "xml"))) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
+        }
+
         // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
         var requestBytes = Base64.getDecoder().decode(request.getBody());
-        context.getLogger().info("Request length (number of bytes): " + String.valueOf(requestBytes.length));
+        context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
         try {
-            final var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
+            var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
+
+            if(returnDataFormat.equals("json")) {
+                datasetsString = RestPdfApi.convertXmlToJson(datasetsString);
+            }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
-        } catch (IOException e) { // Catching errors from the RestPdfApi methods.
+
+        } catch (JsonProcessingException e) {
+            // This is above IOException because JsonProcessingExceptions inherits from it.
+            context.getLogger().log(Level.SEVERE, e.toString());
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
+
+        } catch (IOException e) {
             context.getLogger().log(Level.SEVERE, "Unable to create InputStream.");
             context.getLogger().log(Level.SEVERE, e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
+
         } catch (TransformerException e) {
+            context.getLogger().log(Level.SEVERE, "DOM Transform failed.");
             context.getLogger().log(Level.SEVERE, e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("DOM Transform failed.").build();
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
 }

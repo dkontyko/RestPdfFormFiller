@@ -1,5 +1,7 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.lowagie.text.pdf.PdfReader;
 
 import javax.xml.transform.OutputKeys;
@@ -18,7 +20,7 @@ public class RestPdfApi {
      * Gets the XML form field data from the given DA 4187. (This may work with other XFA forms, but
      * it's specifically designed to work with the 4187 for now.
      * @param is An <code>InputStream</code> representing the DA 4187.
-     * @return A pretty-printed XML String of the XFA form data.
+     * @return A pretty-printed XML String of the XFA form data (everything withing and including the datasets node).
      * @throws IOException If there's a problem with creating the <code>PDFReader</code>.
      * @throws TransformerException If there's a problem with transforming the extracted datasets node into a string.
      */
@@ -50,6 +52,13 @@ public class RestPdfApi {
      */
     public static String get4187DatasetNodeAsString(byte[] pdfBytes) throws IOException, TransformerException {
         return get4187DatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
+    }
+
+    public static String convertXmlToJson(String xml) throws JsonProcessingException {
+        var xmlMapper = new XmlMapper();
+        var jsonNode = xmlMapper.readTree(xml);
+        return jsonNode.toPrettyString();
+
     }
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
