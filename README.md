@@ -1,17 +1,20 @@
 # azure-function-examples
 
-[![Build and deploy Java project to Azure Function App - restpdfformfiller](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller(dev).yml/badge.svg?branch=dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller(dev).yml)
+[![Azure Function Deploy (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller(dev).yml/badge.svg?branch=dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller(dev).yml)
 
+[![CodeQL (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg?branch=dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml)
+
+[![Java CI with Maven (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg?branch=dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml)
 
 # Project Structure
 ## HttpTriggerFunctions
 Holds the actual Azure functions that will be exposed to the internet. Performs HTTP/REST operations.
 
-## <Future Name>
-Sends and receives objects (what objects?) to the trigger functions above. Interfaces with OpenPDF to perform the requested operations.
+## RestPdfApi
+Sends and receives (something) to the trigger functions above. Interfaces with OpenPDF to perform the requested operations.
 
 
-# API
+# (Future) API
 ## Get Form Fields
 Given a PDF form (XFA or regular Acroform), retreives a list of form fields correlated with their field descriptions/numbering.
 
