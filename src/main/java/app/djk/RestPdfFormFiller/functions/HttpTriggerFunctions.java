@@ -63,8 +63,8 @@ public class HttpTriggerFunctions {
      * @return An HTTP Response indicating the result of the request. If successful, the body will contain the
      * XFA form field data.
      */
-    @FunctionName("Get4187Data")
-    public HttpResponseMessage get4187Data(
+    @FunctionName("GetXfaData")
+    public HttpResponseMessage getXfaData(
             @HttpTrigger(
                     name = "req",
                     methods = {HttpMethod.POST},
