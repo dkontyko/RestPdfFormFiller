@@ -38,6 +38,6 @@ jobs:
         with:
           app-name: 'restpdfformfiller'
           slot-name: 'dev'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_BDBA781036624199A1082B7AFF1397FC }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B15C80A58D7F4AFBB8B187DC650B6F68 }}
           package: '${{ env.PACKAGE_DIRECTORY }}'
           respect-pom-xml: true
