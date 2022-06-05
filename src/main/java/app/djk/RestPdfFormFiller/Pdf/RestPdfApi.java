@@ -1,8 +1,12 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.lowagie.text.pdf.PdfReader;
+import jdk.jshell.spi.ExecutionControl;
 
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
@@ -54,11 +58,34 @@ public class RestPdfApi {
         return get4187DatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
     }
 
-    public static String convertXmlToJson(String xml) throws JsonProcessingException {
-        var xmlMapper = new XmlMapper();
-        var jsonNode = xmlMapper.readTree(xml);
-        return jsonNode.toPrettyString();
+    public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
+        return convertXmlToJsonNode(xml).toPrettyString();
 
+    }
+
+    public static JsonNode convertXmlToJsonNode(String xml) throws JsonProcessingException {
+        var xmlMapper = new XmlMapper();
+        return xmlMapper.readTree(xml);
+    }
+
+    /**
+     *
+     * @param xml The XML data from the form.
+     * @return A pretty-printed String of a JSON schema object representing the JSON schema version of the form schema.
+     */
+    public static String generateJsonSchema(String xml) throws JsonProcessingException, ExecutionControl.NotImplementedException {
+        var topNode = convertXmlToJsonNode(xml);
+        return generateJsonSchema(topNode, null).toPrettyString();
+    }
+
+    // if object, then "type": "object" and "properties": { <child nodes>}
+    // else string, "<nodeName>": { "type": "string" }
+    private static JsonNode generateJsonSchema(JsonNode sourceNode, ObjectNode parentSchema) throws ExecutionControl.NotImplementedException {
+        if(parentSchema == null) {
+            parentSchema = (new ObjectMapper().createObjectNode());
+        }
+
+        throw new ExecutionControl.NotImplementedException("Method not implemented");
     }
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content

@@ -12,13 +12,9 @@ import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 
 import javax.xml.transform.TransformerException;
-import java.io.BufferedInputStream;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.Base64;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.logging.Level;
 
 /**
@@ -100,7 +96,7 @@ public class HttpTriggerFunctions {
             var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
 
             if(returnDataFormat.equals("json")) {
-                datasetsString = RestPdfApi.convertXmlToJson(datasetsString);
+                datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
             }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
 
