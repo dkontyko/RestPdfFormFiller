@@ -150,4 +150,17 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
+
+    @FunctionName("FillXfaData")
+    public HttpResponseMessage fillXfaData(
+            @HttpTrigger(
+                    name = "req",
+                    methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.FUNCTION)
+            HttpRequestMessage<String> request,
+            final ExecutionContext context) {
+
+        return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+
+    }
 }

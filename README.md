@@ -1,22 +1,25 @@
 # RestPdfFormFiller
 
-![Azure Function Deploy (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml/badge.svg)
+[![Azure Function Deployment](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml)
 
-![CodeQL (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg)
+[![CodeQL](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml)
 
-![Java CI with Maven (Dev)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg)
+[![Java CI with Maven](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml)
 
 # Project Structure
 ## HttpTriggerFunctions
-Holds the actual Azure functions that will be exposed to the internet. Performs HTTP/REST operations.
+Holds the  Azure Function App endpoints. Handles HTTP requests and builds responses.
 
 ## RestPdfApi
-Sends and receives (something) to the trigger functions above. Interfaces with OpenPDF to perform the requested operations.
+Holds the static methods that perform the actual PDF operations.
 
+# Azure Function Endpoints
+## GetXfaData (POST)
+Given an XFAF PDF form, extracts and returns the datasets node as either XML or JSON.
 
-# (Future) API
-## Get Form Fields
-Given a PDF form (XFA or regular Acroform), retreives a list of form fields correlated with their field descriptions/numbering.
+### Parameters
+* format: Query parameter that must be either "xml" or "json".
+* bodyData: The POST body must be the base64-encoded bytes of the PDF file. For Power Automate, you can use the SharePoint Get file content action and reference body/$content.
 
-## Fill Form
+## Fill Form (Not implemented)
 Given a PDF form and a JSON object of field values, returns the PDF form with the given fields containing the values passed in the JSON object.
