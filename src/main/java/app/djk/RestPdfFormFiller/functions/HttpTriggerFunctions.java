@@ -2,11 +2,7 @@ package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.microsoft.azure.functions.ExecutionContext;
-import com.microsoft.azure.functions.HttpMethod;
-import com.microsoft.azure.functions.HttpRequestMessage;
-import com.microsoft.azure.functions.HttpResponseMessage;
-import com.microsoft.azure.functions.HttpStatus;
+import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
@@ -15,7 +11,6 @@ import javax.xml.transform.TransformerException;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.Objects;
-import java.util.logging.Level;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -77,7 +72,7 @@ public class HttpTriggerFunctions {
 
         // Checking if a body was received in the HTTP request.
         if(request.getBody().isEmpty()) {
-            context.getLogger().log(Level.SEVERE, "No content supplied in body.");
+            context.getLogger().warning("No content supplied in body.");
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
         }
 
@@ -102,17 +97,56 @@ public class HttpTriggerFunctions {
 
         } catch (JsonProcessingException e) {
             // This is above IOException because JsonProcessingExceptions inherits from it.
-            context.getLogger().log(Level.SEVERE, e.toString());
+            context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
 
         } catch (IOException e) {
-            context.getLogger().log(Level.SEVERE, "Unable to create InputStream.");
-            context.getLogger().log(Level.SEVERE, e.toString());
+            context.getLogger().warning("Unable to create InputStream.");
+            context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
 
         } catch (TransformerException e) {
-            context.getLogger().log(Level.SEVERE, "DOM Transform failed.");
-            context.getLogger().log(Level.SEVERE, e.toString());
+            context.getLogger().warning("DOM Transform failed.");
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
+        }
+    }
+
+    @FunctionName("GetXfaSchema")
+    public HttpResponseMessage getXfaSchema(
+            @HttpTrigger(
+                    name = "req",
+                    methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.FUNCTION)
+            HttpRequestMessage<String> request,
+            final ExecutionContext context) {
+
+        // Checking if a body was received in the HTTP request.
+        if(request.getBody().isEmpty()) {
+            context.getLogger().warning("No content supplied in body.");
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
+        }
+
+        // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+        var requestBytes = Base64.getDecoder().decode(request.getBody());
+        context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+
+        try {
+            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.get4187DatasetNodeAsString(requestBytes));
+            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+        } catch (JsonProcessingException e) {
+            // This is above IOException because JsonProcessingExceptions inherits from it.
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
+
+        } catch (IOException e) {
+            context.getLogger().warning("Unable to create InputStream.");
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
+
+        } catch (TransformerException e) {
+            context.getLogger().warning("DOM Transform failed.");
+            context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
