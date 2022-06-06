@@ -163,4 +163,40 @@ public class HttpTriggerFunctions {
         return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
 
     }
+
+    @FunctionName("FillXfaDataPart1")
+    public HttpResponseMessage fillXfaDataPart1(
+            @HttpTrigger(
+                    name = "req",
+                    methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.FUNCTION)
+            HttpRequestMessage<String> request,
+            final ExecutionContext context) {
+
+        // Checking if a body was received in the HTTP request.
+        if(request.getBody().isEmpty()) {
+            context.getLogger().warning("No content supplied in body.");
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
+        }
+
+        try {
+            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+            var requestBytes = Base64.getDecoder().decode(request.getBody());
+            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+
+            if(!RestPdfApi.isXfaForm(requestBytes)) {
+                throw new IOException();
+            }
+
+            var sessionId = FileSessions.storeFile(requestBytes);
+
+            return request.createResponseBuilder(HttpStatus.CREATED).header("sessionId", sessionId).build();
+        } catch (IllegalArgumentException e) {
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
+        } catch (IOException e) {
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid PDF forms.").build();
+        }
+    }
 }
