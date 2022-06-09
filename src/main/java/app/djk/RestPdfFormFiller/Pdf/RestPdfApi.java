@@ -120,5 +120,15 @@ public class RestPdfApi {
         return schemaNode;
     }
 
+    public static boolean isXfaForm(final InputStream pdfStream) throws IOException {
+        try(var pdfReader = new PdfReader(pdfStream)) {
+            return pdfReader.getAcroFields().getXfa().isXfaPresent();
+        }
+    }
+
+    public static boolean isXfaForm(final byte[] pdfBytes) throws IOException {
+        return isXfaForm(new ByteArrayInputStream(pdfBytes));
+    }
+
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
 }
