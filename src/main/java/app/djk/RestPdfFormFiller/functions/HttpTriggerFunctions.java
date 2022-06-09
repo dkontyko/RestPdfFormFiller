@@ -203,7 +203,7 @@ public class HttpTriggerFunctions {
 
         // Still need to write logic to fill XFA.
 
-        throw new RuntimeException("Not implemented");
+        return request.createResponseBuilder(HttpStatus.METHOD_NOT_ALLOWED).body("Not implemented.").build();
 
     }
 
