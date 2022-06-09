@@ -17,38 +17,6 @@ import java.util.Objects;
  */
 public class HttpTriggerFunctions {
 
-    /* Gets a user-supplied URL, let's not do that.
-    @FunctionName("GetBlank4187Data")
-    public HttpResponseMessage run(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.GET},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-        context.getLogger().info("Java HTTP trigger processed a request.");
-
-        // Parse query parameter
-        final String query = request.getQueryParameters().get("formURL");
-        final String formURL = request.getBody().orElse(query);
-
-        if (formURL == null) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Please pass a formURL on the query string or in the request body").build();
-        }
-
-        try (var inputStream = new BufferedInputStream(new URL(formURL).openStream())) {
-            final var datasetsString = RestPdfApi.get4187DatasetNodeAsString(inputStream);
-            return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
-        } catch (MalformedURLException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("formURL invalid.").build();
-        } catch (IOException e) {
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
-        } catch (TransformerException e) {
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("DOM Transform failed.").build();
-        }
-    }
-     */
-
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      *
@@ -164,8 +132,8 @@ public class HttpTriggerFunctions {
 
     }
 
-    @FunctionName("FillXfaDataPart1")
-    public HttpResponseMessage fillXfaDataPart1(
+    @FunctionName("FillXfaFormDataPart1")
+    public HttpResponseMessage fillXfaFormDataPart1(
             @HttpTrigger(
                     name = "req",
                     methods = {HttpMethod.POST},
@@ -198,5 +166,49 @@ public class HttpTriggerFunctions {
             context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid PDF forms.").build();
         }
+    }
+
+    /**
+     * Takes a session ID in the header and a JSON string in the body of the form field data. Fills the
+     * XFA PDF associated with the session with the submitted data. Returns the PDF in binary.
+     * @param request
+     * @param context
+     * @return
+     */
+    @FunctionName("FillXfaFormDataPart2")
+    public HttpResponseMessage fillXfaFormDataPart2(
+            @HttpTrigger(
+                    name = "req",
+                    methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.FUNCTION)
+            HttpRequestMessage<String> request,
+            final ExecutionContext context) {
+
+        // Checking if a body was received in the HTTP request.
+        if(request.getBody().isEmpty()) {
+            context.getLogger().warning("No content supplied in body.");
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
+        }
+
+        // getting session ID to retrieve file
+        final var sessionId = request.getHeaders().get("sessionId");
+        try {
+            // Verifying that session ID is valid base64.
+            Base64.getDecoder().decode(sessionId);
+        } catch (IllegalArgumentException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
+        }
+
+        final var fileBytes = FileSessions.retrieveFile(sessionId);
+
+        // Still need to write logic to fill XFA.
+
+        throw new RuntimeException("Not implemented");
+
+    }
+
+    private HttpResponseMessage errorHandler(final HttpRequestMessage<?> request, final ExecutionContext context, Exception ex) {
+        // error handling will probably be refactored here.
+        throw new RuntimeException("Not yet implemented.");
     }
 }
