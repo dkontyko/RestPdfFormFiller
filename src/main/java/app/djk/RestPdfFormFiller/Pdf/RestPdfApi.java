@@ -63,6 +63,14 @@ public class RestPdfApi {
         return get4187DatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
     }
 
+    /*
+    public static byte[] setXfaDatasetNode(InputStream inputStream, String xmlDataset) throws IOException {
+        try(var reader = new PdfReader(inputStream))  {
+
+        }
+    }
+     */
+
     public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
         return convertXmlToJsonNode(xml).toPrettyString();
 
@@ -79,8 +87,8 @@ public class RestPdfApi {
      *
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
-     * not handle the rest of the schema specification. This method is strictly intended to be compatiable with
-     * the Power Automate custom commector dynamic schema parameter.
+     * not handle the rest of the schema specification. This method is strictly intended to be compatible with
+     * the Power Automate custom connector dynamic schema parameter.
      *
      * @param xml The XML data from the form.
      * @return A pretty-printed String of a JSON schema object representing the JSON schema version of the form schema.
@@ -93,8 +101,8 @@ public class RestPdfApi {
     /**
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
-     * not handle the rest of the schema specification. This method is strictly intended to be compatiable with
-     * the Power Automate custom commector dynamic schema parameter.
+     * not handle the rest of the schema specification. This method is strictly intended to be compatible with
+     * the Power Automate custom connector dynamic schema parameter.
      *
      * @param sourceNode The JSON node upon which to base the schema.
      * @return A JSON node representing the argument's schema.
