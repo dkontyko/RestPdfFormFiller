@@ -1,6 +1,9 @@
 package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
+import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
+import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
+import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
@@ -10,7 +13,6 @@ import com.microsoft.azure.functions.annotation.HttpTrigger;
 import javax.xml.transform.TransformerException;
 import java.io.IOException;
 import java.util.Base64;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -36,49 +38,30 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        // Checking if a body was received in the HTTP request.
-        if(request.getBody().isEmpty()) {
-            context.getLogger().warning("No content supplied in body.");
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
-        }
+        return errorHandler(request, context, () -> {
+            // Checking if a body was received in the HTTP request.
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
-        // Desired format of the returned form data.
-        final var returnDataFormat = request.getQueryParameters().get("format");
+            // Return format supplied as URL query parameter. See RestPdfApi for valid formats.
+            final var returnDataFormat = request.getQueryParameters().get("format");
 
-        if(!(Objects.equals(returnDataFormat, "json")) && !(Objects.equals(returnDataFormat, "xml"))) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
-        }
+            if(!RestPdfApi.FORM_DATA_FORMATS.contains(returnDataFormat)) {
+                throw new InvalidReturnDataFormatException();
+            }
 
-        // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-        var requestBytes = Base64.getDecoder().decode(request.getBody());
-        context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+            final var requestBytes = Base64.getDecoder().decode(requestBody);
+            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-        try {
             var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
-
             if(returnDataFormat.equals("json")) {
                 datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
             }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
-
-        } catch (JsonProcessingException e) {
-            // This is above IOException because JsonProcessingExceptions inherits from it.
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
-
-        } catch (IOException e) {
-            context.getLogger().warning("Unable to create InputStream.");
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
-
-        } catch (TransformerException e) {
-            context.getLogger().warning("DOM Transform failed.");
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
-        }
+        });
     }
 
     @FunctionName("GetXfaSchema")
@@ -105,16 +88,16 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
         } catch (JsonProcessingException e) {
             // This is above IOException because JsonProcessingExceptions inherits from it.
-            context.getLogger().warning(e.toString());
+            context.getLogger().warning(e.toString()); //TODO Move this to called method.
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
 
         } catch (IOException e) {
-            context.getLogger().warning("Unable to create InputStream.");
+            context.getLogger().warning("Unable to create InputStream."); //TODO Move this to called method.
             context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
 
         } catch (TransformerException e) {
-            context.getLogger().warning("DOM Transform failed.");
+            context.getLogger().warning("DOM Transform failed."); //TODO Move this to called method.
             context.getLogger().warning(e.toString());
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
@@ -143,12 +126,13 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(IllegalArgumentException::new);
+            //TODO The exception here may need to be customized to EmptyBodyException or similar
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
             final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
             if(!RestPdfApi.isXfaForm(requestBytes)) {
-                throw new IOException();
+                throw new InvalidXfaFormException();
             }
 
             final var sessionId = FileSessions.storeFile(requestBytes);
@@ -197,6 +181,13 @@ public class HttpTriggerFunctions {
 
     }
 
+    /**
+     * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
+     * @param request HTTP request from the caller.
+     * @param context ExecutionContext from the caller.
+     * @param function Caller-specific function code to be executed.
+     * @return An HTTP response with the result of the function operation.
+     */
     private HttpResponseMessage errorHandler(final HttpRequestMessage<?> request,
                                              final ExecutionContext context,
                                              final ThrowingSupplier<HttpResponseMessage> function) {
@@ -213,17 +204,28 @@ public class HttpTriggerFunctions {
             try {
                 return function.get();
             } catch (Exception e) {
+                context.getLogger().warning(e.toString());
                 var eClass = e.getClass();
                 throw eClass.cast(e);
             }
+        } // Local project exceptions
+        catch (EmptyRequestBodyException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
+        } catch (InvalidXfaFormException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid XFA form.").build();
+        } catch (InvalidReturnDataFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
+        }
+        // Dependency and built-in exceptions
+        catch (JsonProcessingException e) {
+            // This is above IOException because JsonProcessingExceptions inherits from it.
+            // This may be converted to a generic error message, since it's not a user-correctable issue.
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
         } catch (IllegalArgumentException e) {
-            context.getLogger().warning(e.toString());
+            //TODO Incorrect message for this exception type?
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
-        } catch (IOException e) {
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid PDF forms.").build();
-        } catch (Exception e) {
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }  catch (Exception e) {
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
 

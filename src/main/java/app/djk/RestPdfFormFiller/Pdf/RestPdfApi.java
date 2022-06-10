@@ -17,8 +17,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class RestPdfApi {
+    public static final ArrayList<String> FORM_DATA_FORMATS = new ArrayList<>(Arrays.asList("json", "xml"));
 
     /**
      * Gets the XML form field data from the given DA 4187. (This may work with other XFA forms, but
