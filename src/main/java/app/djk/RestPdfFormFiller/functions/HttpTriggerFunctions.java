@@ -11,6 +11,7 @@ import javax.xml.transform.TransformerException;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -138,42 +139,31 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        // Checking if a body was received in the HTTP request.
-        if(request.getBody().isEmpty()) {
-            context.getLogger().warning("No content supplied in body.");
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
-        }
-
-        try {
-            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            var requestBytes = Base64.getDecoder().decode(request.getBody());
+        return errorHandler(request, context, () -> {
+            final var requestBody = request.getBody().orElseThrow(IllegalArgumentException::new);
+            final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
             if(!RestPdfApi.isXfaForm(requestBytes)) {
                 throw new IOException();
             }
 
-            var sessionId = FileSessions.storeFile(requestBytes);
-
+            final var sessionId = FileSessions.storeFile(requestBytes);
+            context.getLogger().info("Stored file successfully.");
             return request.createResponseBuilder(HttpStatus.CREATED).header("sessionId", sessionId).build();
-        } catch (IllegalArgumentException e) {
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
-        } catch (IOException e) {
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid PDF forms.").build();
-        }
+        });
     }
 
     /**
      * Takes a session ID in the header and a JSON string in the body of the form field data. Fills the
      * XFA PDF associated with the session with the submitted data. Returns the PDF in binary.
-     * @param request
-     * @param context
-     * @return
+     * @param request Azure Function parameter representing the HTTP request.
+     * @param context Azure Function parameter representing the execution context.
+     * @return An HTTP Response indicating the result of the request. If successful, the body will contain
+     * XFA form with the fields filled as specified in the request.
      */
     @FunctionName("FillXfaFormDataPart2")
     public HttpResponseMessage fillXfaFormDataPart2(
@@ -207,8 +197,38 @@ public class HttpTriggerFunctions {
 
     }
 
-    private HttpResponseMessage errorHandler(final HttpRequestMessage<?> request, final ExecutionContext context, Exception ex) {
-        // error handling will probably be refactored here.
-        throw new RuntimeException("Not yet implemented.");
+    private HttpResponseMessage errorHandler(final HttpRequestMessage<?> request,
+                                             final ExecutionContext context,
+                                             final ThrowingSupplier<HttpResponseMessage> function) {
+        try {
+            /*
+             AFAIK, lambdas cannot inherently throw checked exceptions.
+             So I wrote a custom functional interface that can throw an exception. But
+             in order to do so, you have to declare every possible exception that may be
+             thrown in the method signature. So instead, I'm just declaring the base Exception
+             class. But then I can't handle specific exceptions without downcasting the exception
+             to its original type. So that's what the inner try-catch block does, until I find a
+             better way.
+            */
+            try {
+                return function.get();
+            } catch (Exception e) {
+                var eClass = e.getClass();
+                throw eClass.cast(e);
+            }
+        } catch (IllegalArgumentException e) {
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
+        } catch (IOException e) {
+            context.getLogger().warning(e.toString());
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid PDF forms.").build();
+        } catch (Exception e) {
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws Exception;
     }
 }
