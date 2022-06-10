@@ -216,11 +216,11 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
         }
         // Dependency and built-in exceptions
-        catch (JsonProcessingException e) {
+       /* catch (JsonProcessingException e) {
             // This is above IOException because JsonProcessingExceptions inherits from it.
             // This may be converted to a generic error message, since it's not a user-correctable issue.
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
-        } catch (IllegalArgumentException e) {
+        } */catch (IllegalArgumentException e) {
             //TODO Incorrect message for this exception type?
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
         }  catch (Exception e) {
