@@ -4,14 +4,12 @@ import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 
-import javax.xml.transform.TransformerException;
-import java.io.IOException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -70,37 +68,19 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        // Checking if a body was received in the HTTP request.
-        if(request.getBody().isEmpty()) {
-            context.getLogger().warning("No content supplied in body.");
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
-        }
+        return errorHandler(request, context, () ->{
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
-        // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-        var requestBytes = Base64.getDecoder().decode(request.getBody());
-        context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+            var requestBytes = Base64.getDecoder().decode(requestBody);
+            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-        try {
             var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.get4187DatasetNodeAsString(requestBytes));
             return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
-        } catch (JsonProcessingException e) {
-            // This is above IOException because JsonProcessingExceptions inherits from it.
-            context.getLogger().warning(e.toString()); //TODO Move this to called method.
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
-
-        } catch (IOException e) {
-            context.getLogger().warning("Unable to create InputStream."); //TODO Move this to called method.
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
-
-        } catch (TransformerException e) {
-            context.getLogger().warning("DOM Transform failed."); //TODO Move this to called method.
-            context.getLogger().warning(e.toString());
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
-        }
+        });
     }
 
     @FunctionName("FillXfaData")
@@ -154,30 +134,20 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        // Checking if a body was received in the HTTP request.
-        if(request.getBody().isEmpty()) {
-            context.getLogger().warning("No content supplied in body.");
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
-        }
+        return errorHandler(request, context, () -> {
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
-        // getting session ID to retrieve file
-        final var sessionId = request.getHeaders().get("sessionId");
-        try {
-            // Verifying that session ID is valid base64.
-            Base64.getDecoder().decode(sessionId);
-        } catch (IllegalArgumentException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
-        }
+            final var sessionId = request.getHeaders().get("sessionid");
+            Base64.getDecoder().decode(sessionId); // Verifying that session ID is valid base64.
 
-        final var fileBytes = FileSessions.retrieveFile(sessionId);
+            final var fileBytes = FileSessions.retrieveFile(sessionId);
 
+            return request.createResponseBuilder(HttpStatus.METHOD_NOT_ALLOWED).body("Not implemented.").build();
+        });
         // Still need to write logic to fill XFA.
-
-        return request.createResponseBuilder(HttpStatus.METHOD_NOT_ALLOWED).body("Not implemented.").build();
-
     }
 
     /**
@@ -203,12 +173,14 @@ public class HttpTriggerFunctions {
             try {
                 return function.get();
             } catch (Exception e) {
-                context.getLogger().warning(e.toString());
+                context.getLogger().warning("Caught exception: " + e);
+                context.getLogger().warning(Arrays.toString(e.getStackTrace()));
                 var eClass = e.getClass();
                 throw eClass.cast(e);
             }
         } // Local project exceptions
         catch (EmptyRequestBodyException e) {
+            context.getLogger().warning("Empty request body.");
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
         } catch (InvalidXfaFormException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid XFA form.").build();
@@ -216,13 +188,8 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
         }
         // Dependency and built-in exceptions
-       /* catch (JsonProcessingException e) {
-            // This is above IOException because JsonProcessingExceptions inherits from it.
-            // This may be converted to a generic error message, since it's not a user-correctable issue.
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Converting XML to JSON failed.").build();
-        } */catch (IllegalArgumentException e) {
-            //TODO Incorrect message for this exception type?
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Body not valid base64.").build();
+        catch (IllegalArgumentException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
         }  catch (Exception e) {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
