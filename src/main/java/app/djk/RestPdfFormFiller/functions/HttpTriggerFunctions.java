@@ -126,7 +126,6 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () -> {
-            //TODO The exception here may need to be customized to EmptyBodyException or similar
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
             final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
@@ -229,6 +228,11 @@ public class HttpTriggerFunctions {
         }
     }
 
+    /**
+     * The built-in <code>Supplier</code> does not throw checked exceptions, so this provides that capability
+     * for use in lambda expressions.
+     * @param <T> The supplier return type.
+     */
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
         T get() throws Exception;
