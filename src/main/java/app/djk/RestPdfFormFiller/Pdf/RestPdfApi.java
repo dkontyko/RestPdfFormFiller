@@ -32,7 +32,7 @@ public class RestPdfApi {
      * @throws IOException          If there's a problem with creating the <code>PDFReader</code>.
      * @throws TransformerException If there's a problem with transforming the extracted datasets node into a string.
      */
-    public static String get4187DatasetNodeAsString(InputStream is) throws IOException, TransformerException {
+    public static String getXfaDatasetNodeAsString(InputStream is) throws IOException, TransformerException {
         try (var newReader = new PdfReader(is)) {
             //This is the node that contains the XFA form data.
             final var datasetsNode = newReader.getAcroFields().getXfa().getDatasetsNode();
@@ -59,8 +59,8 @@ public class RestPdfApi {
      * @throws IOException          Same as the overloaded method.
      * @throws TransformerException Same as the overloaded method.
      */
-    public static String get4187DatasetNodeAsString(byte[] pdfBytes) throws IOException, TransformerException {
-        return get4187DatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
+    public static String getXfaDatasetNodeAsString(byte[] pdfBytes) throws IOException, TransformerException {
+        return getXfaDatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
     }
 
     /*

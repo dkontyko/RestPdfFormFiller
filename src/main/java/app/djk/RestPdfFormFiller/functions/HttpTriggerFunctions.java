@@ -54,7 +54,7 @@ public class HttpTriggerFunctions {
             final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-            var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
+            var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
             if(returnDataFormat.equals("json")) {
                 datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
             }
@@ -78,7 +78,7 @@ public class HttpTriggerFunctions {
             var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.get4187DatasetNodeAsString(requestBytes));
+            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
             return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
         });
     }
