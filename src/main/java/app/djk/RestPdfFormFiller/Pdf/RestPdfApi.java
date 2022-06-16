@@ -111,6 +111,7 @@ public class RestPdfApi {
         final var objectMapper = new ObjectMapper();
         final var schemaNode = objectMapper.createObjectNode();
 
+        // TODO add array type
         // if object, then "type": "object" and "properties": { <child schemas>}
         // else string, "<nodeName>": { "type": "string" }
         if (sourceNode.getNodeType() == JsonNodeType.OBJECT) {

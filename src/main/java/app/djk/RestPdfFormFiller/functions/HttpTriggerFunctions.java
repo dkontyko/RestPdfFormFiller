@@ -3,6 +3,7 @@ package app.djk.RestPdfFormFiller.functions;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
+import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
@@ -140,7 +141,9 @@ public class HttpTriggerFunctions {
         return errorHandler(request, context, () -> {
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
+            // Header keys are case-insensitive, and something is lowercasing this header.
             final var sessionId = request.getHeaders().get("sessionid");
+            if(sessionId == null) { throw new InvalidSessionIdException(); }
             Base64.getDecoder().decode(sessionId); // Verifying that session ID is valid base64.
 
             final var fileBytes = FileSessions.retrieveFile(sessionId);
@@ -186,6 +189,8 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid XFA form.").build();
         } catch (InvalidReturnDataFormatException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
+        } catch (InvalidSessionIdException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
         }
         // Dependency and built-in exceptions
         catch (IllegalArgumentException e) {
