@@ -19,6 +19,8 @@ import java.util.Optional;
  */
 public class HttpTriggerFunctions {
 
+    private static final String SESSION_ID_HEADER_KEY = "x-session-id";
+
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      *
@@ -117,7 +119,7 @@ public class HttpTriggerFunctions {
 
             final var sessionId = FileSessions.storeFile(requestBytes);
             context.getLogger().info("Stored file successfully.");
-            return request.createResponseBuilder(HttpStatus.CREATED).header("sessionId", sessionId).build();
+            return request.createResponseBuilder(HttpStatus.CREATED).header(SESSION_ID_HEADER_KEY, sessionId).build();
         });
     }
 
@@ -142,7 +144,7 @@ public class HttpTriggerFunctions {
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
             // Header keys are case-insensitive, and something is lowercasing this header.
-            final var sessionId = request.getHeaders().get("sessionid");
+            final var sessionId = request.getHeaders().get(SESSION_ID_HEADER_KEY);
             if(sessionId == null) { throw new InvalidSessionIdException(); }
             Base64.getDecoder().decode(sessionId); // Verifying that session ID is valid base64.
 
