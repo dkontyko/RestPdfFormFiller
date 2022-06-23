@@ -95,65 +95,16 @@ public class HttpTriggerFunctions {
             HttpRequestMessage<String> request,
             final ExecutionContext context) {
 
+
+        // get drive ID and item ID from URL query
+        // get PDF from SPO
+        // fill with body json from request
+        // return PDF in response body (don't edit file)
+
+
         return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
-
     }
 
-    @FunctionName("FillXfaFormDataPart1")
-    public HttpResponseMessage fillXfaFormDataPart1(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.POST},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-
-        return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-            final var requestBytes = Base64.getDecoder().decode(requestBody);
-            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
-
-            if(!RestPdfApi.isXfaForm(requestBytes)) {
-                throw new InvalidXfaFormException();
-            }
-
-            final var sessionId = FileSessions.storeFile(requestBytes);
-            context.getLogger().info("Stored file successfully.");
-            return request.createResponseBuilder(HttpStatus.CREATED).header(SESSION_ID_HEADER_KEY, sessionId).build();
-        });
-    }
-
-    /**
-     * Takes a session ID in the header and a JSON string in the body of the form field data. Fills the
-     * XFA PDF associated with the session with the submitted data. Returns the PDF in binary.
-     * @param request Azure Function parameter representing the HTTP request.
-     * @param context Azure Function parameter representing the execution context.
-     * @return An HTTP Response indicating the result of the request. If successful, the body will contain
-     * XFA form with the fields filled as specified in the request.
-     */
-    @FunctionName("FillXfaFormDataPart2")
-    public HttpResponseMessage fillXfaFormDataPart2(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.POST},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-
-        return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-
-            // Header keys are case-insensitive, and something is lowercasing this header.
-            final var sessionId = request.getHeaders().get(SESSION_ID_HEADER_KEY);
-            if(sessionId == null) { throw new InvalidSessionIdException(); }
-            Base64.getDecoder().decode(sessionId); // Verifying that session ID is valid base64.
-
-            final var fileBytes = FileSessions.retrieveFile(sessionId);
-
-            return request.createResponseBuilder(HttpStatus.METHOD_NOT_ALLOWED).body("Not implemented.").build();
-        });
-        // Still need to write logic to fill XFA.
-    }
 
     /**
      * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
