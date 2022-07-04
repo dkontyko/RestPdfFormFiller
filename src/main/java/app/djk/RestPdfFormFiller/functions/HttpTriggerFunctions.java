@@ -76,32 +76,48 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () ->{
-            // validating query input parameters by casting them to their requisite types.
-            final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
-            final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-            final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
+            if(request.getBody().isEmpty()) {
+                // If no file sent in body, then retrieve file from SPO.
 
-            final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
+                // validating query input parameters by casting them to their requisite types.
+                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
+                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
-            final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
-            final GraphServiceClient<Request> graphClient = GraphServiceClient
-                    .builder()
-                    .authenticationProvider(tokenCredential)
-                    .buildClient();
+                context.getLogger().info("Site ID: " + siteID);
+                context.getLogger().info("List ID: " + listID);
+                context.getLogger().info("Item ID: "+ itemID);
 
-            final var result = graphClient
-                    .sites(siteID)
-                    .lists(listID.toString())
-                    .items(Integer.toString(itemID))
-                    .driveItem()
-                    .content()
-                    .buildRequest();
+                final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 
-            final var fileStream = result.get();
+                final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
+                final GraphServiceClient<Request> graphClient = GraphServiceClient
+                        .builder()
+                        .authenticationProvider(tokenCredential)
+                        .buildClient();
 
-            Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
-            final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
-            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+                final var result = graphClient
+                        .sites(siteID)
+                        .lists(listID.toString())
+                        .items(Integer.toString(itemID))
+                        .driveItem()
+                        .content()
+                        .buildRequest();
+
+                final var fileStream = result.get();
+
+                Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
+                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
+                return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+            } else {
+                final var requestBody = request.getBody().get();
+                // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+                var requestBytes = Base64.getDecoder().decode(requestBody);
+                context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+
+                var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
+                return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+            }
         });
     }
 
