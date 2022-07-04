@@ -5,7 +5,6 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.azure.core.credential.TokenRequestContext;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
@@ -13,22 +12,16 @@ import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
 import com.microsoft.graph.core.ClientException;
-import com.microsoft.graph.requests.DriveItemRequest;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
 import java.io.BufferedInputStream;
-import java.net.URL;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Azure Functions with HTTP Trigger.
  */
 public class HttpTriggerFunctions {
-
-    private static final String SESSION_ID_HEADER_KEY = "x-session-id";
-
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      *
@@ -83,40 +76,32 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () ->{
-            final var siteID = request.getQueryParameters().get("siteID");
+            // validating query input parameters by casting them to their requisite types.
+            final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
             final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-            final var itemID = Integer.valueOf(request.getQueryParameters().getOrDefault("itemID", ""));
+            final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
             final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
-//            final var token = defaultCredential.getToken(new TokenRequestContext()
-//                    .addScopes("https://graph.microsoft.com/.default"));
 
             final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
-            final GraphServiceClient<Request> graphClient = GraphServiceClient.builder()
+            final GraphServiceClient<Request> graphClient = GraphServiceClient
+                    .builder()
                     .authenticationProvider(tokenCredential)
                     .buildClient();
 
             final var result = graphClient
                     .sites(siteID)
                     .lists(listID.toString())
-                    .items(itemID.toString())
+                    .items(Integer.toString(itemID))
                     .driveItem()
                     .content()
                     .buildRequest();
 
             final var fileStream = result.get();
 
+            Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
             final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
             return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
-
-//            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-//
-//            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-//            var requestBytes = Base64.getDecoder().decode(requestBody);
-//            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
-//
-//            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
-//
         });
     }
 
@@ -199,5 +184,21 @@ public class HttpTriggerFunctions {
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
         T get() throws Exception;
+    }
+
+    /**
+     * Basic input validation to ensure the siteID doesn't have obvious attempts at code injection.
+     * Site IDs should (probably) not be more than 200 characters, not contain slashes, and contain
+     * exactly 2 commas.
+     * @param siteID The site ID to validate.
+     * @return The value as <code>siteID</code>, if validation checks passed.
+     */
+    private static String validateSiteID(final String siteID) {
+        if(siteID.length() > 200 ||
+            siteID.chars().filter(ch ->ch == ',').count() != 2 ||
+            siteID.indexOf('/') != -1) {
+            throw new IllegalArgumentException("Invalid site ID.");
+        }
+        return siteID;
     }
 }
