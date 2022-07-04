@@ -52,7 +52,7 @@ public class RestPdfApi {
 
     /**
      * Wraps the <code>byte[]</code> in an <code>InputStream</code> and calls
-     * <code>get4187DatasetNodeAsString(InputStream is)</code>.
+     * <code>getXfaDatasetNodeAsString(InputStream is)</code>.
      *
      * @param pdfBytes A <code>byte[]</code> representing the DA 4187.
      * @return Same as the overloaded method.

@@ -12,13 +12,15 @@ import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
+import com.microsoft.graph.core.ClientException;
+import com.microsoft.graph.requests.DriveItemRequest;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Optional;
-import java.util.UUID;
+import java.io.BufferedInputStream;
+import java.net.URL;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -81,29 +83,31 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () ->{
-//            final var siteURI = request.getQueryParameters().get("siteURL");
-//            final var listID = UUID.fromString(request.getQueryParameters().get("listID"));
-//            final var itemID = Integer.parseInt(request.getQueryParameters().get("itemID"));
+            final var siteID = request.getQueryParameters().get("siteID");
+            final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+            final var itemID = Integer.valueOf(request.getQueryParameters().getOrDefault("itemID", ""));
 
             final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 //            final var token = defaultCredential.getToken(new TokenRequestContext()
 //                    .addScopes("https://graph.microsoft.com/.default"));
 
+            final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
             final GraphServiceClient<Request> graphClient = GraphServiceClient.builder()
-                    .authenticationProvider(new TokenCredentialAuthProvider(defaultCredential))
+                    .authenticationProvider(tokenCredential)
                     .buildClient();
 
             final var result = graphClient
-                    .sites("dkontyko.sharepoint.com,21b6583c-752e-42ee-8c59-684d7623eccb,2ffc65d4-1442-4c8c-8b9d-b1ee45416efa")
-                    .lists()
+                    .sites(siteID)
+                    .lists(listID.toString())
+                    .items(itemID.toString())
+                    .driveItem()
+                    .content()
                     .buildRequest();
 
-            if(result != null) {
-                return request.createResponseBuilder(HttpStatus.OK).body(result.toString()).build();
-            } else {
-                return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("result was null. :(").build();
-            }
+            final var fileStream = result.get();
 
+            final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
+            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
 
 //            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 //
@@ -112,7 +116,7 @@ public class HttpTriggerFunctions {
 //            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 //
 //            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
-//            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+//
         });
     }
 
@@ -176,7 +180,9 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
         }
         // Dependency and built-in exceptions
-        catch (NumberFormatException e) {
+        catch (ClientException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Could not retrieve file.").build();
+        } catch (NumberFormatException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
         } catch (IllegalArgumentException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
