@@ -15,6 +15,7 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
+import java.io.BufferedInputStream;
 import java.util.*;
 
 /**
@@ -78,17 +79,6 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
-                //TODO remove debug code
-                // Testing token headers
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ID-TOKEN") != null) {
-                    context.getLogger().info("AAD ID token is present.");
-                }
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ACCESS-TOKEN") != null) {
-                    context.getLogger().info("AAD access token is present.");
-                }
-                context.getLogger().info("If Expires-On present, it will be here: " + request.getHeaders().getOrDefault("X-MS-TOKEN-AAD-EXPIRES-ON", "no expires-on key found"));
-
-
                 // validating query input parameters by casting them to their requisite types.
                 final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
                 final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
@@ -117,7 +107,7 @@ public class HttpTriggerFunctions {
                 final var fileStream = result.get();
 
                 Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
-                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
+                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             } else {
                 final var requestBody = request.getBody().get();
