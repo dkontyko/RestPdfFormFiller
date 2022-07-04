@@ -5,14 +5,20 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import com.azure.core.credential.TokenRequestContext;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
+import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
+import com.microsoft.graph.requests.GraphServiceClient;
+import okhttp3.Request;
 
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -75,14 +81,38 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () ->{
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+//            final var siteURI = request.getQueryParameters().get("siteURL");
+//            final var listID = UUID.fromString(request.getQueryParameters().get("listID"));
+//            final var itemID = Integer.parseInt(request.getQueryParameters().get("itemID"));
 
-            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            var requestBytes = Base64.getDecoder().decode(requestBody);
-            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+            final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
+//            final var token = defaultCredential.getToken(new TokenRequestContext()
+//                    .addScopes("https://graph.microsoft.com/.default"));
 
-            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
-            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+            final GraphServiceClient<Request> graphClient = GraphServiceClient.builder()
+                    .authenticationProvider(new TokenCredentialAuthProvider(defaultCredential))
+                    .buildClient();
+
+            final var result = graphClient
+                    .sites("dkontyko.sharepoint.com,21b6583c-752e-42ee-8c59-684d7623eccb,2ffc65d4-1442-4c8c-8b9d-b1ee45416efa")
+                    .lists()
+                    .buildRequest();
+
+            if(result != null) {
+                return request.createResponseBuilder(HttpStatus.OK).body(result.toString()).build();
+            } else {
+                return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("result was null. :(").build();
+            }
+
+
+//            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+//
+//            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+//            var requestBytes = Base64.getDecoder().decode(requestBody);
+//            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+//
+//            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
+//            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
         });
     }
 
@@ -96,7 +126,7 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
 
-        // get drive ID and item ID from URL query
+        // get list ID and item ID from URL query
         // get PDF from SPO
         // fill with body json from request
         // return PDF in response body (don't edit file)
@@ -146,7 +176,9 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
         }
         // Dependency and built-in exceptions
-        catch (IllegalArgumentException e) {
+        catch (NumberFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
+        } catch (IllegalArgumentException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
         }  catch (Exception e) {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
