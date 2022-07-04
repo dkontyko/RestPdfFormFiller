@@ -3,21 +3,25 @@ package app.djk.RestPdfFormFiller.functions;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
+import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
+import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
+import com.microsoft.graph.core.ClientException;
+import com.microsoft.graph.requests.GraphServiceClient;
+import okhttp3.Request;
 
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Optional;
+import java.io.BufferedInputStream;
+import java.util.*;
 
 /**
  * Azure Functions with HTTP Trigger.
  */
 public class HttpTriggerFunctions {
-
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      *
@@ -54,7 +58,7 @@ public class HttpTriggerFunctions {
             final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-            var datasetsString = RestPdfApi.get4187DatasetNodeAsString(requestBytes);
+            var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
             if(returnDataFormat.equals("json")) {
                 datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
             }
@@ -72,14 +76,48 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
         return errorHandler(request, context, () ->{
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+            if(request.getBody().isEmpty()) {
+                // If no file sent in body, then retrieve file from SPO.
 
-            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            var requestBytes = Base64.getDecoder().decode(requestBody);
-            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+                // validating query input parameters by casting them to their requisite types.
+                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
+                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
-            var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.get4187DatasetNodeAsString(requestBytes));
-            return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+                context.getLogger().info("Site ID: " + siteID);
+                context.getLogger().info("List ID: " + listID);
+                context.getLogger().info("Item ID: "+ itemID);
+
+                final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
+
+                final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
+                final GraphServiceClient<Request> graphClient = GraphServiceClient
+                        .builder()
+                        .authenticationProvider(tokenCredential)
+                        .buildClient();
+
+                final var result = graphClient
+                        .sites(siteID)
+                        .lists(listID.toString())
+                        .items(Integer.toString(itemID))
+                        .driveItem()
+                        .content()
+                        .buildRequest();
+
+                final var fileStream = result.get();
+
+                Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
+                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(new BufferedInputStream(fileStream)));
+                return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+            } else {
+                final var requestBody = request.getBody().get();
+                // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+                var requestBytes = Base64.getDecoder().decode(requestBody);
+                context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
+
+                var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
+                return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+            }
         });
     }
 
@@ -92,63 +130,16 @@ public class HttpTriggerFunctions {
             HttpRequestMessage<String> request,
             final ExecutionContext context) {
 
+
+        // get list ID and item ID from URL query
+        // get PDF from SPO
+        // fill with body json from request
+        // return PDF in response body (don't edit file)
+
+
         return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
-
     }
 
-    @FunctionName("FillXfaFormDataPart1")
-    public HttpResponseMessage fillXfaFormDataPart1(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.POST},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-
-        return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-            final var requestBytes = Base64.getDecoder().decode(requestBody);
-            context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
-
-            if(!RestPdfApi.isXfaForm(requestBytes)) {
-                throw new InvalidXfaFormException();
-            }
-
-            final var sessionId = FileSessions.storeFile(requestBytes);
-            context.getLogger().info("Stored file successfully.");
-            return request.createResponseBuilder(HttpStatus.CREATED).header("sessionId", sessionId).build();
-        });
-    }
-
-    /**
-     * Takes a session ID in the header and a JSON string in the body of the form field data. Fills the
-     * XFA PDF associated with the session with the submitted data. Returns the PDF in binary.
-     * @param request Azure Function parameter representing the HTTP request.
-     * @param context Azure Function parameter representing the execution context.
-     * @return An HTTP Response indicating the result of the request. If successful, the body will contain
-     * XFA form with the fields filled as specified in the request.
-     */
-    @FunctionName("FillXfaFormDataPart2")
-    public HttpResponseMessage fillXfaFormDataPart2(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.POST},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-
-        return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-
-            final var sessionId = request.getHeaders().get("sessionid");
-            Base64.getDecoder().decode(sessionId); // Verifying that session ID is valid base64.
-
-            final var fileBytes = FileSessions.retrieveFile(sessionId);
-
-            return request.createResponseBuilder(HttpStatus.METHOD_NOT_ALLOWED).body("Not implemented.").build();
-        });
-        // Still need to write logic to fill XFA.
-    }
 
     /**
      * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
@@ -186,9 +177,15 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid XFA form.").build();
         } catch (InvalidReturnDataFormatException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
+        } catch (InvalidSessionIdException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
         }
         // Dependency and built-in exceptions
-        catch (IllegalArgumentException e) {
+        catch (ClientException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Could not retrieve file.").build();
+        } catch (NumberFormatException e) {
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
+        } catch (IllegalArgumentException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
         }  catch (Exception e) {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
@@ -203,5 +200,21 @@ public class HttpTriggerFunctions {
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
         T get() throws Exception;
+    }
+
+    /**
+     * Basic input validation to ensure the siteID doesn't have obvious attempts at code injection.
+     * Site IDs should (probably) not be more than 200 characters, not contain slashes, and contain
+     * exactly 2 commas.
+     * @param siteID The site ID to validate.
+     * @return The value as <code>siteID</code>, if validation checks passed.
+     */
+    private static String validateSiteID(final String siteID) {
+        if(siteID.length() > 200 ||
+            siteID.chars().filter(ch ->ch == ',').count() != 2 ||
+            siteID.indexOf('/') != -1) {
+            throw new IllegalArgumentException("Invalid site ID.");
+        }
+        return siteID;
     }
 }

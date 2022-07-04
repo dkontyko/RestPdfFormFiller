@@ -32,7 +32,7 @@ public class RestPdfApi {
      * @throws IOException          If there's a problem with creating the <code>PDFReader</code>.
      * @throws TransformerException If there's a problem with transforming the extracted datasets node into a string.
      */
-    public static String get4187DatasetNodeAsString(InputStream is) throws IOException, TransformerException {
+    public static String getXfaDatasetNodeAsString(InputStream is) throws IOException, TransformerException {
         try (var newReader = new PdfReader(is)) {
             //This is the node that contains the XFA form data.
             final var datasetsNode = newReader.getAcroFields().getXfa().getDatasetsNode();
@@ -52,16 +52,24 @@ public class RestPdfApi {
 
     /**
      * Wraps the <code>byte[]</code> in an <code>InputStream</code> and calls
-     * <code>get4187DatasetNodeAsString(InputStream is)</code>.
+     * <code>getXfaDatasetNodeAsString(InputStream is)</code>.
      *
      * @param pdfBytes A <code>byte[]</code> representing the DA 4187.
      * @return Same as the overloaded method.
      * @throws IOException          Same as the overloaded method.
      * @throws TransformerException Same as the overloaded method.
      */
-    public static String get4187DatasetNodeAsString(byte[] pdfBytes) throws IOException, TransformerException {
-        return get4187DatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
+    public static String getXfaDatasetNodeAsString(byte[] pdfBytes) throws IOException, TransformerException {
+        return getXfaDatasetNodeAsString(new ByteArrayInputStream(pdfBytes));
     }
+
+    /*
+    public static byte[] setXfaDatasetNode(InputStream inputStream, String xmlDataset) throws IOException {
+        try(var reader = new PdfReader(inputStream))  {
+
+        }
+    }
+     */
 
     public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
         return convertXmlToJsonNode(xml).toPrettyString();
@@ -79,8 +87,8 @@ public class RestPdfApi {
      *
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
-     * not handle the rest of the schema specification. This method is strictly intended to be compatiable with
-     * the Power Automate custom commector dynamic schema parameter.
+     * not handle the rest of the schema specification. This method is strictly intended to be compatible with
+     * the Power Automate custom connector dynamic schema parameter.
      *
      * @param xml The XML data from the form.
      * @return A pretty-printed String of a JSON schema object representing the JSON schema version of the form schema.
@@ -93,8 +101,8 @@ public class RestPdfApi {
     /**
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
-     * not handle the rest of the schema specification. This method is strictly intended to be compatiable with
-     * the Power Automate custom commector dynamic schema parameter.
+     * not handle the rest of the schema specification. This method is strictly intended to be compatible with
+     * the Power Automate custom connector dynamic schema parameter.
      *
      * @param sourceNode The JSON node upon which to base the schema.
      * @return A JSON node representing the argument's schema.
@@ -103,6 +111,7 @@ public class RestPdfApi {
         final var objectMapper = new ObjectMapper();
         final var schemaNode = objectMapper.createObjectNode();
 
+        // TODO add array type
         // if object, then "type": "object" and "properties": { <child schemas>}
         // else string, "<nodeName>": { "type": "string" }
         if (sourceNode.getNodeType() == JsonNodeType.OBJECT) {
