@@ -1,6 +1,6 @@
 # RestPdfFormFiller
 
-[![Azure Function Deployment](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/dev_restpdfformfiller.yml)
+[![Azure Function App Deployment](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/main_restpdfformfiller(dev).yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/main_restpdfformfiller(dev).yml)
 
 [![CodeQL](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/codeql.yml)
 
