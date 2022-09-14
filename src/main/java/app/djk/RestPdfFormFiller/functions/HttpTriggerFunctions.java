@@ -80,6 +80,9 @@ public class HttpTriggerFunctions {
 
                 //TODO remove debug code
                 // Testing token headers
+                context.getLogger().info("Printing headers...");
+                request.getHeaders().forEach((key, value) -> context.getLogger().info(key + ": " + value));
+
                 if(request.getHeaders().get("X-MS-TOKEN-AAD-ID-TOKEN") != null) {
                     context.getLogger().info("AAD ID token is present.");
                 }
