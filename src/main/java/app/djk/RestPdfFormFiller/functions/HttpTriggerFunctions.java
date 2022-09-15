@@ -23,7 +23,6 @@ import java.util.*;
 public class HttpTriggerFunctions {
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
-     *
      * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
      * set to either <code>json</code> or <code>xml</code> for the return format of the form data.
      * It also requires the request body to have the binary PDF file encoded in base64.
@@ -116,6 +115,10 @@ public class HttpTriggerFunctions {
                         .driveItem()
                         .content()
                         .buildRequest();
+
+                //TODO below statement is debug code
+                if(request.getHeaders().get("Authorization") != null)
+                    result.addHeader("Authorization", request.getHeaders().get("Authorization"));
 
                 final var fileStream = result.get();
 
