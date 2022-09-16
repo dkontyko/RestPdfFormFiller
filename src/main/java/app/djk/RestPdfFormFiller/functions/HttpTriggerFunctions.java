@@ -15,12 +15,26 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.*;
 
 /**
  * Azure Functions with HTTP Trigger.
  */
 public class HttpTriggerFunctions {
+
+    //TODO clean up
+    private static final URL baseFunctionUrl;
+
+    static {
+        try {
+            baseFunctionUrl = new URL(System.getenv("WebUrl"));
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
@@ -102,11 +116,16 @@ public class HttpTriggerFunctions {
 
                 final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 
+                //final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
+
+                final var tokenURL = new URL(baseFunctionUrl, "/.auth/me");
                 final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
                 final GraphServiceClient<Request> graphClient = GraphServiceClient
                         .builder()
                         .authenticationProvider(tokenCredential)
                         .buildClient();
+
+                final var authToken = tokenCredential.getAuthorizationTokenAsync(tokenURL);
 
                 final var result = graphClient
                         .sites(siteID)
@@ -118,7 +137,7 @@ public class HttpTriggerFunctions {
 
                 //TODO below statement is debug code
                 if(request.getHeaders().get("Authorization") != null)
-                    result.addHeader("Authorization", request.getHeaders().get("Authorization"));
+                    result.addHeader("Authorization", authToken.get());
 
                 final var fileStream = result.get();
 
