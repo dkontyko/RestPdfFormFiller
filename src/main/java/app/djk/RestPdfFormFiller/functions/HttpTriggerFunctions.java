@@ -127,6 +127,8 @@ public class HttpTriggerFunctions {
 
                 final var authToken = tokenCredential.getAuthorizationTokenAsync(tokenURL);
 
+                context.getLogger().info("Auth token: " + authToken.get());
+
                 final var result = graphClient
                         .sites(siteID)
                         .lists(listID.toString())
