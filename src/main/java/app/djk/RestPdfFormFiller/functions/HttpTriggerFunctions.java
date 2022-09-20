@@ -6,6 +6,10 @@ import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatExcept
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.microsoft.aad.msal4j.ClientCredentialFactory;
+import com.microsoft.aad.msal4j.ConfidentialClientApplication;
+import com.microsoft.aad.msal4j.OnBehalfOfParameters;
+import com.microsoft.aad.msal4j.UserAssertion;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
@@ -15,9 +19,6 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -94,37 +95,38 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
+                // validating query input parameters by casting them to their requisite types.
+                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
+                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
+
                 //////////////////////////////////////////////////////////////////////////////////////////////////////
                 //TODO remove debug code
                 // Testing token headers
                 context.getLogger().info("Printing headers...");
                 request.getHeaders().forEach((key, value) -> context.getLogger().info(key + ": " + value));
 
-                // validating query input parameters by casting them to their requisite types.
-                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
-                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
-
                 context.getLogger().info("Site ID: " + siteID);
                 context.getLogger().info("List ID: " + listID);
                 context.getLogger().info("Item ID: "+ itemID);
 
-                var getAuthTokenConn = (HttpURLConnection)(new URL(baseFunctionUrl, "/.auth/me")).openConnection();
-                getAuthTokenConn.setRequestMethod("GET");
-                getAuthTokenConn.setRequestProperty("Authorization", request.getHeaders().get("Authorization"));
+                // MSAL Test Code
+                final var incomingUserAuthToken = request.getHeaders().get("Authorization").substring(7);
 
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(getAuthTokenConn.getInputStream()));
-                String inputLine;
-                StringBuilder content = new StringBuilder();
-                while ((inputLine = in.readLine()) != null) {
-                    content.append(inputLine);
-                }
-                in.close();
+                final var clientId = System.getenv("clientId");
+                final var clientSecret = System.getenv("clientSecret");
+                final var scopes = Collections.singleton("https://graph.microsoft.com/.default");
 
-                getAuthTokenConn.disconnect();
+                var clientCredential = ClientCredentialFactory.createFromSecret(clientSecret);
 
-                context.getLogger().info("/.auth/me contents: " + content);
+                var confidClientApp = ConfidentialClientApplication.builder(clientId, clientCredential).build();
+                var oboParameters = OnBehalfOfParameters.builder(scopes, new UserAssertion(incomingUserAuthToken)).build();
+
+                var tokenResult = confidClientApp.acquireToken(oboParameters).join();
+
+                context.getLogger().info("acquireToken result: " + tokenResult);
+
+                context.getLogger().info("accessToken result: " + tokenResult.accessToken());
 
 
                 //////////////////////////////////////////////////////////////////////////////////////////////////////
