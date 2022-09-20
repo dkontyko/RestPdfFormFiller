@@ -121,6 +121,8 @@ public class HttpTriggerFunctions {
                 }
                 in.close();
 
+                getAuthTokenConn.disconnect();
+
                 context.getLogger().info("/.auth/me contents: " + content);
 
 
