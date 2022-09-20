@@ -111,7 +111,7 @@ public class HttpTriggerFunctions {
                 context.getLogger().info("Item ID: "+ itemID);
 
                 // MSAL Test Code
-                final var incomingUserAuthToken = request.getHeaders().get("Authorization").substring(7);
+                final var incomingUserAuthToken = request.getHeaders().get("authorization").substring(7);
 
                 final var clientId = System.getenv("clientId");
                 final var clientSecret = System.getenv("clientSecret");
