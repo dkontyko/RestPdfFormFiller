@@ -111,6 +111,7 @@ public class HttpTriggerFunctions {
 
                 var getAuthTokenConn = (HttpURLConnection)(new URL(baseFunctionUrl, "/.auth/me")).openConnection();
                 getAuthTokenConn.setRequestMethod("GET");
+                getAuthTokenConn.setRequestProperty("Authorization", request.getHeaders().get("Authorization"));
 
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(getAuthTokenConn.getInputStream()));
