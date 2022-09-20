@@ -15,6 +15,9 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -91,19 +94,11 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
+                //////////////////////////////////////////////////////////////////////////////////////////////////////
                 //TODO remove debug code
                 // Testing token headers
                 context.getLogger().info("Printing headers...");
                 request.getHeaders().forEach((key, value) -> context.getLogger().info(key + ": " + value));
-
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ID-TOKEN") != null) {
-                    context.getLogger().info("AAD ID token is present.");
-                }
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ACCESS-TOKEN") != null) {
-                    context.getLogger().info("AAD access token is present.");
-                }
-                context.getLogger().info("If Expires-On present, it will be here: " + request.getHeaders().getOrDefault("X-MS-TOKEN-AAD-EXPIRES-ON", "no expires-on key found"));
-
 
                 // validating query input parameters by casting them to their requisite types.
                 final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
@@ -114,20 +109,29 @@ public class HttpTriggerFunctions {
                 context.getLogger().info("List ID: " + listID);
                 context.getLogger().info("Item ID: "+ itemID);
 
+                var getAuthTokenConn = (HttpURLConnection)(new URL(baseFunctionUrl, "/.auth/me")).openConnection();
+                getAuthTokenConn.setRequestMethod("GET");
+
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(getAuthTokenConn.getInputStream()));
+                String inputLine;
+                StringBuilder content = new StringBuilder();
+                while ((inputLine = in.readLine()) != null) {
+                    content.append(inputLine);
+                }
+                in.close();
+
+                context.getLogger().info("/.auth/me contents: " + content);
+
+
+                //////////////////////////////////////////////////////////////////////////////////////////////////////
                 final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 
-                //final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
-
-                final var tokenURL = new URL(baseFunctionUrl, "/.auth/me");
                 final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
                 final GraphServiceClient<Request> graphClient = GraphServiceClient
                         .builder()
                         .authenticationProvider(tokenCredential)
                         .buildClient();
-
-                final var authToken = tokenCredential.getAuthorizationTokenAsync(tokenURL);
-
-                context.getLogger().info("Auth token: " + authToken.get());
 
                 final var result = graphClient
                         .sites(siteID)
@@ -136,10 +140,6 @@ public class HttpTriggerFunctions {
                         .driveItem()
                         .content()
                         .buildRequest();
-
-                //TODO below statement is debug code
-                if(request.getHeaders().get("Authorization") != null)
-                    result.addHeader("Authorization", authToken.get());
 
                 final var fileStream = result.get();
 
