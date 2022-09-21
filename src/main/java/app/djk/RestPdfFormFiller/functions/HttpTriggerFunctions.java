@@ -6,6 +6,7 @@ import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatExcept
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.identity.OnBehalfOfCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
@@ -23,7 +24,6 @@ import java.util.*;
 public class HttpTriggerFunctions {
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
-     *
      * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
      * set to either <code>json</code> or <code>xml</code> for the return format of the form data.
      * It also requires the request body to have the binary PDF file encoded in base64.
@@ -78,29 +78,12 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
-                //TODO remove debug code
-                // Testing token headers
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ID-TOKEN") != null) {
-                    context.getLogger().info("AAD ID token is present.");
-                }
-                if(request.getHeaders().get("X-MS-TOKEN-AAD-ACCESS-TOKEN") != null) {
-                    context.getLogger().info("AAD access token is present.");
-                }
-                context.getLogger().info("If Expires-On present, it will be here: " + request.getHeaders().getOrDefault("X-MS-TOKEN-AAD-EXPIRES-ON", "no expires-on key found"));
-
-
                 // validating query input parameters by casting them to their requisite types.
                 final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
                 final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
                 final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
-                context.getLogger().info("Site ID: " + siteID);
-                context.getLogger().info("List ID: " + listID);
-                context.getLogger().info("Item ID: "+ itemID);
-
-                final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
-
-                final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
+                final var tokenCredential = getTokenCredAuthProv(request);
                 final GraphServiceClient<Request> graphClient = GraphServiceClient
                         .builder()
                         .authenticationProvider(tokenCredential)
@@ -226,5 +209,38 @@ public class HttpTriggerFunctions {
             throw new IllegalArgumentException("Invalid site ID.");
         }
         return siteID;
+    }
+
+    /**
+     * Returns the appropriate token credential auth provider based on whether an authorization header was included
+     * in the HTTP request. If the header was included, this will return an on-behalf-of credential that grants access
+     * to the default Graph APIs for the registered application using the incoming user's identity. If no header
+     * was included, then this returns the default Azure credential.
+     *
+     * @param request The HTTP request received by the function.
+     * @return A token credential auth provider generated from either the default Azure credential or
+     * an on-behalf-of credential.
+     * @param <T> Not used; a generic reference to the HttpRequestMessage's contained type.
+     */
+    private static <T> TokenCredentialAuthProvider getTokenCredAuthProv(final HttpRequestMessage<T> request) {
+        final var authHeader = request.getHeaders().get("authorization");
+
+        if(authHeader == null) {
+            // Right now this is limited to local test cases
+            return new TokenCredentialAuthProvider(new DefaultAzureCredentialBuilder().build());
+        } else {
+            final var incomingAccessToken = authHeader.substring(7); // removing "Bearer" prefix and space
+            final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
+
+            final var oboCredential = new OnBehalfOfCredentialBuilder()
+                    .tenantId(System.getenv("tenantId"))
+                    .clientId(System.getenv("clientId"))
+                    .clientSecret(System.getenv("clientSecret"))
+                    .userAssertion(incomingAccessToken)
+                    .build();
+
+            return new TokenCredentialAuthProvider(scopes, oboCredential);
+
+        }
     }
 }
