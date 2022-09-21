@@ -5,6 +5,7 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.identity.OnBehalfOfCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
@@ -82,18 +83,7 @@ public class HttpTriggerFunctions {
                 final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
                 final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
-                //TODO This needs to be case insensitive and set to work with the DefaultAzureCredential.
-                final var incomingAuthToken = request.getHeaders().get("authorization").substring(7);
-                final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
-
-                final var oboCredential = new OnBehalfOfCredentialBuilder()
-                        .tenantId(System.getenv("tenantId"))
-                        .clientId(System.getenv("clientId"))
-                        .clientSecret(System.getenv("clientSecret"))
-                        .userAssertion(incomingAuthToken)
-                        .build();
-
-                final var tokenCredential = new TokenCredentialAuthProvider(scopes, oboCredential);
+                final var tokenCredential = getTokenCredAuthProv(request);
                 final GraphServiceClient<Request> graphClient = GraphServiceClient
                         .builder()
                         .authenticationProvider(tokenCredential)
@@ -219,5 +209,38 @@ public class HttpTriggerFunctions {
             throw new IllegalArgumentException("Invalid site ID.");
         }
         return siteID;
+    }
+
+    /**
+     * Returns the appropriate token credential auth provider based on whether an authorization header was included
+     * in the HTTP request. If the header was included, this will return an on-behalf-of credential that grants access
+     * to the default Graph APIs for the registered application using the incoming user's identity. If no header
+     * was included, then this returns the default Azure credential.
+     *
+     * @param request The HTTP request received by the function.
+     * @return A token credential auth provider generated from either the default Azure credential or
+     * an on-behalf-of credential.
+     * @param <T> Not used; a generic reference to the HttpRequestMessage's contained type.
+     */
+    private static <T> TokenCredentialAuthProvider getTokenCredAuthProv(final HttpRequestMessage<T> request) {
+        final var authHeader = request.getHeaders().get("authorization");
+
+        if(authHeader == null) {
+            // Right now this is limited to local test cases
+            return new TokenCredentialAuthProvider(new DefaultAzureCredentialBuilder().build());
+        } else {
+            final var incomingAccessToken = authHeader.substring(7); // removing "Bearer" prefix and space
+            final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
+
+            final var oboCredential = new OnBehalfOfCredentialBuilder()
+                    .tenantId(System.getenv("tenantId"))
+                    .clientId(System.getenv("clientId"))
+                    .clientSecret(System.getenv("clientSecret"))
+                    .userAssertion(incomingAccessToken)
+                    .build();
+
+            return new TokenCredentialAuthProvider(scopes, oboCredential);
+
+        }
     }
 }
