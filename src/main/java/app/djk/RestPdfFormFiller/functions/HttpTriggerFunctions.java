@@ -121,7 +121,9 @@ public class HttpTriggerFunctions {
                 //////////////////////////////////////////////////////////////////////////////////////////////////////
                 //final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 
-                final var oboCredential = new OnBehalfOfCredentialBuilder().clientId(System.getenv("clientId"))
+                final var oboCredential = new OnBehalfOfCredentialBuilder()
+                        .tenantId(System.getenv("tenantId"))
+                        .clientId(System.getenv("clientId"))
                         .clientSecret(System.getenv("clientSecret"))
                         .userAssertion(incomingAuthToken)
                         .build();
