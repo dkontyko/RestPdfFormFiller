@@ -6,6 +6,7 @@ import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatExcept
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.identity.OnBehalfOfCredentialBuilder;
 import com.microsoft.aad.msal4j.ClientCredentialFactory;
 import com.microsoft.aad.msal4j.ConfidentialClientApplication;
 import com.microsoft.aad.msal4j.OnBehalfOfParameters;
@@ -111,28 +112,21 @@ public class HttpTriggerFunctions {
                 context.getLogger().info("Item ID: "+ itemID);
 
                 // MSAL Test Code
-                final var incomingUserAuthToken = request.getHeaders().get("authorization").substring(7);
+                final var incomingAuthToken = request.getHeaders().get("authorization").substring(7);
 
-                final var clientId = System.getenv("clientId");
-                final var clientSecret = System.getenv("clientSecret");
-                final var scopes = Collections.singleton("https://graph.microsoft.com/.default");
-
-                var clientCredential = ClientCredentialFactory.createFromSecret(clientSecret);
-
-                var confidClientApp = ConfidentialClientApplication.builder(clientId, clientCredential).build();
-                var oboParameters = OnBehalfOfParameters.builder(scopes, new UserAssertion(incomingUserAuthToken)).build();
-
-                var tokenResult = confidClientApp.acquireToken(oboParameters).join();
-
-                context.getLogger().info("acquireToken result: " + tokenResult);
-
-                context.getLogger().info("accessToken result: " + tokenResult.accessToken());
+                //final var graphAccessToken = getGraphFilesAccessToken(incomingAuthToken);
+                final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
 
 
                 //////////////////////////////////////////////////////////////////////////////////////////////////////
-                final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
+                //final var defaultCredential = (new DefaultAzureCredentialBuilder()).build();
 
-                final var tokenCredential = new TokenCredentialAuthProvider(defaultCredential);
+                final var oboCredential = new OnBehalfOfCredentialBuilder().clientId(System.getenv("clientId"))
+                        .clientSecret(System.getenv("clientSecret"))
+                        .userAssertion(incomingAuthToken)
+                        .build();
+
+                final var tokenCredential = new TokenCredentialAuthProvider(scopes, oboCredential);
                 final GraphServiceClient<Request> graphClient = GraphServiceClient
                         .builder()
                         .authenticationProvider(tokenCredential)
@@ -258,5 +252,27 @@ public class HttpTriggerFunctions {
             throw new IllegalArgumentException("Invalid site ID.");
         }
         return siteID;
+    }
+
+    /**
+     * Gets a delegated access token for the app's registered Microsoft Graph API scopes using the incoming user's identity.
+     * This allows the function app to access all files that the user can access.
+     * @param incomingAuthToken The access token in the authorization header. Pass only the token itself; do not pass
+     *                          the "Bearer" prefix.
+     * @return An access token granting access to the app's registered Microsoft Graph API scopes.
+     */
+    private static String getGraphFilesAccessToken(String incomingAuthToken) {
+        final var clientId = System.getenv("clientId");
+        final var clientSecret = System.getenv("clientSecret");
+        final var scopes = Collections.singleton("https://graph.microsoft.com/.default");
+
+        final var clientCredential = ClientCredentialFactory.createFromSecret(clientSecret);
+
+        final var confidClientApp = ConfidentialClientApplication.builder(clientId, clientCredential).build();
+        final var oboParameters = OnBehalfOfParameters.builder(scopes, new UserAssertion(incomingAuthToken)).build();
+
+        final var tokenResult = confidClientApp.acquireToken(oboParameters).join();
+
+        return tokenResult.accessToken();
     }
 }
