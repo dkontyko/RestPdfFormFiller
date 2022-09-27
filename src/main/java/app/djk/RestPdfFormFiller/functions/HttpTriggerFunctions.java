@@ -16,6 +16,7 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
+import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -129,8 +130,14 @@ public class HttpTriggerFunctions {
         // fill with body json from request
         // return PDF in response body (don't edit file)
 
+        return errorHandler(request, context, () -> {
 
-        return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+
+
+
+
+            return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+        });
     }
 
 
@@ -242,5 +249,32 @@ public class HttpTriggerFunctions {
             return new TokenCredentialAuthProvider(scopes, oboCredential);
 
         }
+    }
+
+    private static <T> InputStream getFileFromSpo(final HttpRequestMessage<T> request) {
+        // validating query input parameters by casting them to their requisite types.
+        final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
+        final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+        final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
+
+        final var tokenCredential = getTokenCredAuthProv(request);
+        final GraphServiceClient<Request> graphClient = GraphServiceClient
+                .builder()
+                .authenticationProvider(tokenCredential)
+                .buildClient();
+
+        final var result = graphClient
+                .sites(siteID)
+                .lists(listID.toString())
+                .items(Integer.toString(itemID))
+                .driveItem()
+                .content()
+                .buildRequest();
+
+        final var fileStream = result.get();
+
+        Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
+
+        return fileStream;
     }
 }
