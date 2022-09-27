@@ -79,28 +79,7 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
-                // validating query input parameters by casting them to their requisite types.
-                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
-                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
-
-                final var tokenCredential = getTokenCredAuthProv(request);
-                final GraphServiceClient<Request> graphClient = GraphServiceClient
-                        .builder()
-                        .authenticationProvider(tokenCredential)
-                        .buildClient();
-
-                final var result = graphClient
-                        .sites(siteID)
-                        .lists(listID.toString())
-                        .items(Integer.toString(itemID))
-                        .driveItem()
-                        .content()
-                        .buildRequest();
-
-                final var fileStream = result.get();
-
-                Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
+                final var fileStream = getFileFromSpo(request);
                 final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             } else {
@@ -121,7 +100,7 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
 
@@ -132,7 +111,8 @@ public class HttpTriggerFunctions {
 
         return errorHandler(request, context, () -> {
 
-
+            final var fileStream = getFileFromSpo(request);
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
 
 
