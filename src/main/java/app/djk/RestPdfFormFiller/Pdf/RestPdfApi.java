@@ -13,10 +13,7 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -25,7 +22,7 @@ public class RestPdfApi {
 
     /**
      * Gets the XML form field data from the given DA 4187. (This may work with other XFA forms, but
-     * it's specifically designed to work with the 4187 for now.
+     * it's specifically designed to work with the 4187 for now.)
      *
      * @param is An <code>InputStream</code> representing the DA 4187.
      * @return A pretty-printed XML String of the XFA form data (everything withing and including the datasets node).
@@ -84,7 +81,7 @@ public class RestPdfApi {
     /**
      * This method converts the XML to JSON and calls the private <code>generateJsonSchema</code> method.
      * Here is the description from that method:
-     *
+     * <br />
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
      * not handle the rest of the schema specification. This method is strictly intended to be compatible with
@@ -143,4 +140,15 @@ public class RestPdfApi {
     }
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
+
+    public static OutputStream fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException {
+        throw new UnsupportedOperationException("This method has not been implemented.");
+        /*
+        try(var pdfWriter = new PdfWriter(pdfStream)) {
+            // validate JSON
+            // put JSON into form
+            // return OutputStream of PDF
+        }
+         */
+    }
 }
