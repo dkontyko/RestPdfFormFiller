@@ -1,5 +1,6 @@
 package app.djk.RestPdfFormFiller.functions;
 
+import app.djk.RestPdfFormFiller.Pdf.DataFormatter;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
@@ -60,7 +61,7 @@ public class HttpTriggerFunctions {
 
             var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
             if(returnDataFormat.equals("json")) {
-                datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
+                datasetsString = DataFormatter.convertXmlToJsonString(datasetsString);
             }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
         });
@@ -80,7 +81,7 @@ public class HttpTriggerFunctions {
                 // If no file sent in body, then retrieve file from SPO.
 
                 final var fileStream = getFileFromSpo(request);
-                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
+                final var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             } else {
                 final var requestBody = request.getBody().get();
@@ -88,7 +89,7 @@ public class HttpTriggerFunctions {
                 var requestBytes = Base64.getDecoder().decode(requestBody);
                 context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-                var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
+                var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             }
         });
