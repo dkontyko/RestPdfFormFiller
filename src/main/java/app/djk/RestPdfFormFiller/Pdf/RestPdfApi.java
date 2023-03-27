@@ -79,6 +79,7 @@ public class RestPdfApi {
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
 
+    /*
     public static OutputStream fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException {
         if(!isXfaForm(pdfStream)) throw new InvalidXfaFormException();
         var outFile = new BufferedOutputStream(new ByteArrayOutputStream());
@@ -91,4 +92,6 @@ public class RestPdfApi {
             // return OutputStream of PDF
         }
     }
+
+     */
 }
