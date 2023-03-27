@@ -1,5 +1,6 @@
 package app.djk.RestPdfFormFiller.functions;
 
+import app.djk.RestPdfFormFiller.Pdf.DataFormatter;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
@@ -16,6 +17,7 @@ import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
 import okhttp3.Request;
 
+import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -59,7 +61,7 @@ public class HttpTriggerFunctions {
 
             var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
             if(returnDataFormat.equals("json")) {
-                datasetsString = RestPdfApi.convertXmlToJsonString(datasetsString);
+                datasetsString = DataFormatter.convertXmlToJsonString(datasetsString);
             }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
         });
@@ -78,29 +80,8 @@ public class HttpTriggerFunctions {
             if(request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
-                // validating query input parameters by casting them to their requisite types.
-                final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
-                final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-                final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
-
-                final var tokenCredential = getTokenCredAuthProv(request);
-                final GraphServiceClient<Request> graphClient = GraphServiceClient
-                        .builder()
-                        .authenticationProvider(tokenCredential)
-                        .buildClient();
-
-                final var result = graphClient
-                        .sites(siteID)
-                        .lists(listID.toString())
-                        .items(Integer.toString(itemID))
-                        .driveItem()
-                        .content()
-                        .buildRequest();
-
-                final var fileStream = result.get();
-
-                Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
-                final var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
+                final var fileStream = getFileFromSpo(request);
+                final var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             } else {
                 final var requestBody = request.getBody().get();
@@ -108,7 +89,7 @@ public class HttpTriggerFunctions {
                 var requestBytes = Base64.getDecoder().decode(requestBody);
                 context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
-                var dataSchema = RestPdfApi.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
+                var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             }
         });
@@ -120,7 +101,7 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<String> request,
+            HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
 
@@ -129,8 +110,15 @@ public class HttpTriggerFunctions {
         // fill with body json from request
         // return PDF in response body (don't edit file)
 
+        return errorHandler(request, context, () -> {
 
-        return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+            final var fileStream = getFileFromSpo(request);
+            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+
+
+
+            return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+        });
     }
 
 
@@ -242,5 +230,32 @@ public class HttpTriggerFunctions {
             return new TokenCredentialAuthProvider(scopes, oboCredential);
 
         }
+    }
+
+    private static <T> InputStream getFileFromSpo(final HttpRequestMessage<T> request) {
+        // validating query input parameters by casting them to their requisite types.
+        final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
+        final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
+        final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
+
+        final var tokenCredential = getTokenCredAuthProv(request);
+        final GraphServiceClient<Request> graphClient = GraphServiceClient
+                .builder()
+                .authenticationProvider(tokenCredential)
+                .buildClient();
+
+        final var result = graphClient
+                .sites(siteID)
+                .lists(listID.toString())
+                .items(Integer.toString(itemID))
+                .driveItem()
+                .content()
+                .buildRequest();
+
+        final var fileStream = result.get();
+
+        Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
+
+        return fileStream;
     }
 }
