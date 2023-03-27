@@ -51,7 +51,7 @@ public class HttpTriggerFunctions {
             // Return format supplied as URL query parameter. See RestPdfApi for valid formats.
             final var returnDataFormat = request.getQueryParameters().get("format");
 
-            if(!RestPdfApi.FORM_DATA_FORMATS.contains(returnDataFormat)) {
+            if (!RestPdfApi.FORM_DATA_FORMATS.contains(returnDataFormat)) {
                 throw new InvalidReturnDataFormatException();
             }
 
@@ -60,7 +60,7 @@ public class HttpTriggerFunctions {
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
             var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
-            if(returnDataFormat.equals("json")) {
+            if (returnDataFormat.equals("json")) {
                 datasetsString = DataFormatter.convertXmlToJsonString(datasetsString);
             }
             return request.createResponseBuilder(HttpStatus.OK).body(datasetsString).build();
@@ -76,11 +76,11 @@ public class HttpTriggerFunctions {
             HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-        return errorHandler(request, context, () ->{
-            if(request.getBody().isEmpty()) {
+        return errorHandler(request, context, () -> {
+            if (request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
 
-                final var fileStream = getFileFromSpo(request);
+                final var fileStream = getFileInputStreamFromSpo(request);
                 final var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
                 return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
             } else {
@@ -105,27 +105,30 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
 
-        // get list ID and item ID from URL query
         // get PDF from SPO
-        // fill with body json from request
+        // get form content from request body
+        // fill form with content
         // return PDF in response body (don't edit file)
 
         return errorHandler(request, context, () -> {
 
-            final var fileStream = getFileFromSpo(request);
+            final var fileStream = getFileInputStreamFromSpo(request);
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
 
+            final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
+            final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
 
-
-            return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+            return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
+            //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
         });
     }
 
 
     /**
      * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
-     * @param request HTTP request from the caller.
-     * @param context ExecutionContext from the caller.
+     *
+     * @param request  HTTP request from the caller.
+     * @param context  ExecutionContext from the caller.
      * @param function Caller-specific function code to be executed.
      * @return An HTTP response with the result of the function operation.
      */
@@ -134,6 +137,10 @@ public class HttpTriggerFunctions {
                                              final ThrowingSupplier<HttpResponseMessage> function) {
         try {
             /*
+             EDIT: This was a bad idea. (Thank you, GitHub Copilot, for autocompleting that sentence.)
+             I am devolving these exceptions to their respective methods as soon as I have the code working.
+             ------------------
+             ORIGINAL:
              AFAIK, lambdas cannot inherently throw checked exceptions.
              So I wrote a custom functional interface that can throw an exception. But
              in order to do so, you have to declare every possible exception that may be
@@ -168,7 +175,7 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
         } catch (IllegalArgumentException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
-        }  catch (Exception e) {
+        } catch (Exception e) {
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
         }
     }
@@ -176,6 +183,7 @@ public class HttpTriggerFunctions {
     /**
      * The built-in <code>Supplier</code> does not throw checked exceptions, so this provides that capability
      * for use in lambda expressions.
+     *
      * @param <T> The supplier return type.
      */
     @FunctionalInterface
@@ -187,13 +195,14 @@ public class HttpTriggerFunctions {
      * Basic input validation to ensure the siteID doesn't have obvious attempts at code injection.
      * Site IDs should (probably) not be more than 200 characters, not contain slashes, and contain
      * exactly 2 commas.
+     *
      * @param siteID The site ID to validate.
      * @return The value as <code>siteID</code>, if validation checks passed.
      */
     private static String validateSiteID(final String siteID) {
-        if(siteID.length() > 200 ||
-            siteID.chars().filter(ch ->ch == ',').count() != 2 ||
-            siteID.indexOf('/') != -1) {
+        if (siteID.length() > 200 ||
+                siteID.chars().filter(ch -> ch == ',').count() != 2 ||
+                siteID.indexOf('/') != -1) {
             throw new IllegalArgumentException("Invalid site ID.");
         }
         return siteID;
@@ -206,14 +215,14 @@ public class HttpTriggerFunctions {
      * was included, then this returns the default Azure credential.
      *
      * @param request The HTTP request received by the function.
+     * @param <T>     Not used; a generic reference to the HttpRequestMessage's contained type.
      * @return A token credential auth provider generated from either the default Azure credential or
      * an on-behalf-of credential.
-     * @param <T> Not used; a generic reference to the HttpRequestMessage's contained type.
      */
     private static <T> TokenCredentialAuthProvider getTokenCredAuthProv(final HttpRequestMessage<T> request) {
         final var authHeader = request.getHeaders().get("authorization");
 
-        if(authHeader == null) {
+        if (authHeader == null) {
             // Right now this is limited to local test cases
             return new TokenCredentialAuthProvider(new DefaultAzureCredentialBuilder().build());
         } else {
@@ -232,7 +241,7 @@ public class HttpTriggerFunctions {
         }
     }
 
-    private static <T> InputStream getFileFromSpo(final HttpRequestMessage<T> request) {
+    private static <T> InputStream getFileInputStreamFromSpo(final HttpRequestMessage<T> request) {
         // validating query input parameters by casting them to their requisite types.
         final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
         final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
