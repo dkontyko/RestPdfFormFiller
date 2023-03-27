@@ -20,6 +20,9 @@ on:
   schedule:
     - cron: '29 3 * * 2'
 
+env:
+  JAVA_VERSION: '17'
+
 jobs:
   analyze:
     name: Analyze
@@ -53,8 +56,25 @@ jobs:
         
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+    #- name: Build project
+    #  uses: github/codeql-action/autobuild@v2
+    
+    # Autobuild has stopped working, so trying the below steps
+    # to "manually" build instead
+    - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'microsoft'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+    - name: 'Restore Project Dependencies Using Mvn'
+        shell: pwsh
+        run: |
+          pushd './${{ env.PACKAGE_DIRECTORY }}'
+          mvn clean package
+          popd
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
