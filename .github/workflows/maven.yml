@@ -10,7 +10,7 @@ on:
   
 env:
   PACKAGE_DIRECTORY: '.' # set this to the directory which contains pom.xml file
-  JAVA_VERSION: '11' # set this to the java version to use
+  JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
   build:
@@ -24,6 +24,7 @@ jobs:
         with:
           distribution: 'microsoft'
           java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
 
       - name: 'Restore Project Dependencies Using Mvn'
         shell: pwsh
@@ -33,3 +34,4 @@ jobs:
           popd
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+        
