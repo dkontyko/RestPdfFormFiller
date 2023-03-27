@@ -1,10 +1,12 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.PdfStamper;
+import com.lowagie.text.pdf.XfaForm;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
@@ -66,9 +68,8 @@ public class RestPdfApi {
      */
 
 
-
     public static boolean isXfaForm(final InputStream pdfStream) throws IOException {
-        try(var pdfReader = new PdfReader(pdfStream)) {
+        try (var pdfReader = new PdfReader(pdfStream)) {
             return pdfReader.getAcroFields().getXfa().isXfaPresent();
         }
     }
@@ -78,20 +79,19 @@ public class RestPdfApi {
     }
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
-
-    /*
-    public static OutputStream fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException {
-        if(!isXfaForm(pdfStream)) throw new InvalidXfaFormException();
+    public static OutputStream fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
+        if (!isXfaForm(pdfStream)) throw new InvalidXfaFormException();
         var outFile = new BufferedOutputStream(new ByteArrayOutputStream());
-        try {
-            var pdfStamper = new PdfStamper(new PdfReader(pdfStream), outFile);
-            var objMapper = new ObjectMapper();
-            var jsonNode = objMapper.readTree(jsonFormData);
-            // validate JSON
-            // put JSON into form
-            // return OutputStream of PDF
-        }
-    }
+        var pdfStamper = new PdfStamper(new PdfReader(pdfStream), outFile);
 
-     */
+        final var xmlData = DataFormatter.convertJsonToXml(jsonFormData);
+
+        final var xfaForm = new XfaForm(pdfStamper.getReader());
+        xfaForm.fillXfaForm(xmlData);
+        xfaForm.setChanged(true);
+
+        pdfStamper.close();
+        outFile.flush();
+        return outFile;
+    }
 }
