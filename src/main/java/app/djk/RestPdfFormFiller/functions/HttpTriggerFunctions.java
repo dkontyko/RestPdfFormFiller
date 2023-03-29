@@ -234,6 +234,7 @@ public class HttpTriggerFunctions {
                     .clientId(System.getenv("clientId"))
                     .clientSecret(System.getenv("clientSecret"))
                     .userAssertion(incomingAccessToken)
+                    .additionallyAllowedTenants(Collections.singletonList("*"))
                     .build();
 
             return new TokenCredentialAuthProvider(scopes, oboCredential);
