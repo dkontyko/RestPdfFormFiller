@@ -15,8 +15,11 @@ import com.microsoft.azure.functions.annotation.HttpTrigger;
 import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
 import com.microsoft.graph.core.ClientException;
 import com.microsoft.graph.requests.GraphServiceClient;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
@@ -121,6 +124,31 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
             //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
         });
+    }
+
+    @FunctionName("AuthNTest")
+    public HttpResponseMessage authNTest(
+            @HttpTrigger(
+                    name = "req",
+                    methods = {HttpMethod.POST},
+                    authLevel = AuthorizationLevel.FUNCTION)
+            HttpRequestMessage<Optional<String>> request,
+            final ExecutionContext context) {
+
+        return errorHandler(request, context, () -> {
+//            final var fileStream = getFileInputStreamFromSpo(request);
+//            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+//
+//            final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
+//            final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
+//
+//            return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
+//            //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
+
+            var nothing = getAuthTokenOverHttp(request, context);
+            return request.createResponseBuilder(HttpStatus.OK).body(nothing).build();
+        });
+
     }
 
 
@@ -268,4 +296,42 @@ public class HttpTriggerFunctions {
 
         return fileStream;
     }
+
+    private static <T> String getAuthTokenOverHttp(final HttpRequestMessage<T> request, final ExecutionContext context) {
+        final var authHeader = request.getHeaders().get("authorization");
+
+        if (authHeader == null) {
+            throw new IllegalArgumentException("No authorization header provided.");
+        }
+
+        final var incomingToken = authHeader.substring(7); // removing "Bearer" prefix and space
+        context.getLogger().info("Incoming token: " + incomingToken);
+
+        final var client = new OkHttpClient();
+
+        final var formBody = new FormBody.Builder()
+                .add("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
+                .add("client_id", System.getenv("clientId"))
+                .add("client_secret", System.getenv("clientSecret"))
+                .add("assertion", incomingToken)
+                .add("scope", "https://graph.microsoft.com/.default")
+                .add("requested_token_use", "on_behalf_of")
+                .build();
+        context.getLogger().info("Form body: " + formBody.toString());
+
+        final var outgoingRequest = new Request.Builder()
+                .url("https://login.microsoftonline.com/" + System.getenv("tenantId") + "/oauth2/v2.0/token")
+                .post(formBody)
+                .build();
+
+        try (final var response = client.newCall(outgoingRequest).execute()) {
+            context.getLogger().info("Executed outgoing request.");
+            final var responseString = Objects.requireNonNull(response.body()).string();
+            System.out.println(responseString);
+            return "test";
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
