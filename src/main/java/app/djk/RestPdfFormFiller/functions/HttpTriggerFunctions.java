@@ -6,22 +6,15 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.azure.identity.DefaultAzureCredentialBuilder;
-import com.azure.identity.OnBehalfOfCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
 import com.microsoft.graph.core.ClientException;
-import com.microsoft.graph.requests.GraphServiceClient;
-import okhttp3.FormBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Optional;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -82,10 +75,7 @@ public class HttpTriggerFunctions {
         return errorHandler(request, context, () -> {
             if (request.getBody().isEmpty()) {
                 // If no file sent in body, then retrieve file from SPO.
-
-                final var fileStream = getFileInputStreamFromSpo(request);
-                final var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(fileStream));
-                return request.createResponseBuilder(HttpStatus.OK).body(dataSchema).build();
+                throw new EmptyRequestBodyException();
             } else {
                 final var requestBody = request.getBody().get();
                 // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
@@ -125,32 +115,6 @@ public class HttpTriggerFunctions {
             //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
         });
     }
-
-    @FunctionName("AuthNTest")
-    public HttpResponseMessage authNTest(
-            @HttpTrigger(
-                    name = "req",
-                    methods = {HttpMethod.POST},
-                    authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context) {
-
-        return errorHandler(request, context, () -> {
-//            final var fileStream = getFileInputStreamFromSpo(request);
-//            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-//
-//            final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
-//            final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
-//
-//            return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
-//            //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
-
-            var nothing = getAuthTokenOverHttp(request, context);
-            return request.createResponseBuilder(HttpStatus.OK).body(nothing).build();
-        });
-
-    }
-
 
     /**
      * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
@@ -218,120 +182,4 @@ public class HttpTriggerFunctions {
     private interface ThrowingSupplier<T> {
         T get() throws Exception;
     }
-
-    /**
-     * Basic input validation to ensure the siteID doesn't have obvious attempts at code injection.
-     * Site IDs should (probably) not be more than 200 characters, not contain slashes, and contain
-     * exactly 2 commas.
-     *
-     * @param siteID The site ID to validate.
-     * @return The value as <code>siteID</code>, if validation checks passed.
-     */
-    private static String validateSiteID(final String siteID) {
-        if (siteID.length() > 200 ||
-                siteID.chars().filter(ch -> ch == ',').count() != 2 ||
-                siteID.indexOf('/') != -1) {
-            throw new IllegalArgumentException("Invalid site ID.");
-        }
-        return siteID;
-    }
-
-    /**
-     * Returns the appropriate token credential auth provider based on whether an authorization header was included
-     * in the HTTP request. If the header was included, this will return an on-behalf-of credential that grants access
-     * to the default Graph APIs for the registered application using the incoming user's identity. If no header
-     * was included, then this returns the default Azure credential.
-     *
-     * @param request The HTTP request received by the function.
-     * @param <T>     Not used; a generic reference to the HttpRequestMessage's contained type.
-     * @return A token credential auth provider generated from either the default Azure credential or
-     * an on-behalf-of credential.
-     */
-    private static <T> TokenCredentialAuthProvider getTokenCredAuthProv(final HttpRequestMessage<T> request) {
-        final var authHeader = request.getHeaders().get("authorization");
-
-        if (authHeader == null) {
-            // Right now this is limited to local test cases
-            return new TokenCredentialAuthProvider(new DefaultAzureCredentialBuilder().build());
-        } else {
-            final var incomingAccessToken = authHeader.substring(7); // removing "Bearer" prefix and space
-            final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
-
-            final var oboCredential = new OnBehalfOfCredentialBuilder()
-                    .tenantId(System.getenv("tenantId"))
-                    .clientId(System.getenv("clientId"))
-                    .clientSecret(System.getenv("clientSecret"))
-                    .userAssertion(incomingAccessToken)
-                    .additionallyAllowedTenants(Collections.singletonList("*"))
-                    .build();
-
-            return new TokenCredentialAuthProvider(scopes, oboCredential);
-
-        }
-    }
-
-    private static <T> InputStream getFileInputStreamFromSpo(final HttpRequestMessage<T> request) {
-        // validating query input parameters by casting them to their requisite types.
-        final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
-        final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
-        final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
-
-        final var tokenCredential = getTokenCredAuthProv(request);
-        final GraphServiceClient<Request> graphClient = GraphServiceClient
-                .builder()
-                .authenticationProvider(tokenCredential)
-                .buildClient();
-
-        final var result = graphClient
-                .sites(siteID)
-                .lists(listID.toString())
-                .items(Integer.toString(itemID))
-                .driveItem()
-                .content()
-                .buildRequest();
-
-        final var fileStream = result.get();
-
-        Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
-
-        return fileStream;
-    }
-
-    private static <T> String getAuthTokenOverHttp(final HttpRequestMessage<T> request, final ExecutionContext context) {
-        final var authHeader = request.getHeaders().get("authorization");
-
-        if (authHeader == null) {
-            throw new IllegalArgumentException("No authorization header provided.");
-        }
-
-        final var incomingToken = authHeader.substring(7); // removing "Bearer" prefix and space
-        context.getLogger().info("Incoming token: " + incomingToken);
-
-        final var client = new OkHttpClient();
-
-        final var formBody = new FormBody.Builder()
-                .add("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer")
-                .add("client_id", System.getenv("clientId"))
-                .add("client_secret", System.getenv("clientSecret"))
-                .add("assertion", incomingToken)
-                .add("scope", "https://graph.microsoft.com/.default")
-                .add("requested_token_use", "on_behalf_of")
-                .build();
-        context.getLogger().info("Form body: " + formBody.toString());
-
-        final var outgoingRequest = new Request.Builder()
-                .url("https://login.microsoftonline.com/" + System.getenv("tenantId") + "/oauth2/v2.0/token")
-                .post(formBody)
-                .build();
-
-        try (final var response = client.newCall(outgoingRequest).execute()) {
-            context.getLogger().info("Executed outgoing request.");
-            final var responseString = Objects.requireNonNull(response.body()).string();
-            System.out.println(responseString);
-            return "test";
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
 }
