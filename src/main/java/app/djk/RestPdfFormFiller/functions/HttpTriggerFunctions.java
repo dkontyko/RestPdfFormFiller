@@ -6,6 +6,7 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
@@ -98,15 +99,29 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
 
-        // get PDF from SPO
-        // get form content from request body
-        // fill form with content
-        // return PDF in response body (don't edit file)
+
+        /*
+            New plan:
+            Send giant JSON object in body with the form data and the PDF file.
+            The JSON object will have the following structure:
+            {
+
+                "data": {
+                    "field1": "value1",
+                    "field2": "value2",
+                    ...
+                }
+                "file": "base64 encoded PDF file",
+            }
+
+         */
 
         return errorHandler(request, context, () -> {
 
-            final var fileStream = getFileInputStreamFromSpo(request);
+            //final var fileStream = getFileInputStreamFromSpo(request);
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+
+            final var requestJson = (new ObjectMapper()).readTree(requestBody);
 
             final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
             final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
