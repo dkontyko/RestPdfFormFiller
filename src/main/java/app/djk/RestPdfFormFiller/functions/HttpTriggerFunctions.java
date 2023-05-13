@@ -123,6 +123,22 @@ public class HttpTriggerFunctions {
 
             final var requestJson = (new ObjectMapper()).readTree(requestBody);
 
+            if (!requestJson.has("data") || !requestJson.has("file")) {
+                throw new IllegalArgumentException();
+            }
+
+            // Get schemas from data and file.
+            // Check if data schema is contained in file schema.
+
+            final var submittedData = requestJson.get("data");
+
+            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
+            var requestBytes = Base64.getDecoder().decode(requestBody);
+            context.getLogger().info("Form length (number of bytes): " + requestBytes.length);
+
+            final var formXfaData = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
+            final var isDataSubsetOfForm = DataFormatter.validateFormDataSchema(submittedData, formXfaData);
+
             final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
             final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
 

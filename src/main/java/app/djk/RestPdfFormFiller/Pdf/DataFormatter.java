@@ -33,11 +33,12 @@ public class DataFormatter {
     /**
      * Converts a JSON representation of XFA form data to a String XML representation.
      * This method wraps the {@link #convertJsonToXml(String)} method.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws TransformerException If there's a problem with transforming the XML document into a string.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws TransformerException         If there's a problem with transforming the XML document into a string.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static String convertJsonToXmlString(String json) throws ParserConfigurationException, TransformerException {
         final var xmlDocument = convertJsonToXml(json);
@@ -56,10 +57,11 @@ public class DataFormatter {
      * Converts a JSON representation of XFA form data to its XML form.
      * The root XML and data elements are hard-coded because they are constant.
      * This method recurses through the remaining JSON elements and creates the XML elements.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static Document convertJsonToXml(String json) throws ParserConfigurationException {
         final var xmlDocument = (DocumentBuilderFactory.newInstance()).newDocumentBuilder().newDocument();
@@ -95,7 +97,7 @@ public class DataFormatter {
             convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
 
             return xmlDocument;
-        } catch(JsonProcessingException ex) {
+        } catch (JsonProcessingException ex) {
             throw new InvalidXfaFormException();
         }
     }
@@ -103,10 +105,11 @@ public class DataFormatter {
     /**
      * Recursively converts a <code>JsonNode</code> to XML elements.
      * This method modifies the <code>element</code> parameter by adding child elements to it.
+     *
      * @param xmlDocument The XML document to which the elements will be added.
-     * @param element The XML element to which the child elements will be added.
-     * @param jsonNode The JSON node to be converted. This should be the corresponding JSON value content
-     *                 for the <code>element</code> parameter.
+     * @param element     The XML element to which the child elements will be added.
+     * @param jsonNode    The JSON node to be converted. This should be the corresponding JSON value content
+     *                    for the <code>element</code> parameter.
      */
     private static void convertJsonNodeToXmlElement(
             final @NotNull Document xmlDocument,
@@ -144,6 +147,26 @@ public class DataFormatter {
     }
 
     /**
+     * @param data        The data that the user submitted to be added to the form.
+     * @param formXfaNode The XFA data from the submitted form in XML format.
+     * @return Whether the data schema is a valid subset of the form schema.
+     */
+    public static boolean validateFormDataSchema(final JsonNode data, final String formXfaNode) throws JsonProcessingException {
+        final var formTopNode = convertXmlToJsonNode(formXfaNode);
+        final var formSchema = generateJsonSchema(formTopNode);
+        final var dataSchema = generateJsonSchema(data);
+
+        // Traverse dataSchema, comparing each node to formSchema.
+        // If a node is not in formSchema, return false.
+        // If a node is in formSchema, but the types don't match, return false.
+        // If a node is in formSchema, but the types match, but it's an object, recurse.
+        // If a node is in formSchema, but the types match, but it's a string, continue.
+        // If we reach the end of dataSchema, return true.
+
+
+    }
+
+    /**
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
      * everything is either an object or a string. This only generates the type and properties keys; it does
      * not handle the rest of the schema specification. This method is strictly intended to be compatible with
@@ -156,6 +179,7 @@ public class DataFormatter {
         final var objectMapper = new ObjectMapper();
         final var schemaNode = objectMapper.createObjectNode();
 
+        // TODO add DoS prevention, probably node counter with a max of 100-1000
         // TODO add array type
         // if object, then "type": "object" and "properties": { <child schemas>}
         // else string, "<nodeName>": { "type": "string" }
