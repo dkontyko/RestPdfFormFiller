@@ -22,7 +22,7 @@ import java.io.StringWriter;
 public class DataFormatter {
     public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
         return convertXmlToJsonNode(xml).toPrettyString();
-
+        return dataSchema.equals(formSchema);
     }
 
     private static JsonNode convertXmlToJsonNode(String xml) throws JsonProcessingException {
