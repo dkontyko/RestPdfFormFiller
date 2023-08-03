@@ -156,6 +156,14 @@ public class DataFormatter {
         final var formSchema = generateJsonSchema(formTopNode);
         final var dataSchema = generateJsonSchema(data);
 
+
+        // Is dataSchema a subset of formSchema?
+
+        // Search for top node of dataSchema in formSchema.
+        // If not found, return false.
+        // If found, call equals method https://www.javadoc.io/doc/com.fasterxml.jackson.core/jackson-databind/latest/com/fasterxml/jackson/databind/JsonNode.html.
+
+
         // Traverse dataSchema, comparing each node to formSchema.
         // If a node is not in formSchema, return false.
         // If a node is in formSchema, but the types don't match, return false.
@@ -165,6 +173,7 @@ public class DataFormatter {
 
 
     }
+
 
     /**
      * Recursive method that generates a simple JSON schema for the given node. In this simplified schema,
