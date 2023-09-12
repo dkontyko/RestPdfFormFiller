@@ -139,6 +139,10 @@ public class HttpTriggerFunctions {
             final var formXfaData = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
             final var isDataSubsetOfForm = DataFormatter.validateFormDataSchema(submittedData, formXfaData);
 
+            if (!isDataSubsetOfForm) {
+                throw new IllegalArgumentException();
+            }
+
             final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
             final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
 
