@@ -133,16 +133,18 @@ public class HttpTriggerFunctions {
             final var submittedData = requestJson.get("data");
 
             // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            var requestBytes = Base64.getDecoder().decode(requestBody);
-            context.getLogger().info("Form length (number of bytes): " + requestBytes.length);
+            var fileBytes = Base64.getDecoder().decode(requestJson.get("file").textValue());
+            context.getLogger().info("Form length (number of bytes): " + fileBytes.length);
 
-            final var formXfaData = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
+            final var formXfaData = RestPdfApi.getXfaDatasetNodeAsString(fileBytes);
             final var isDataSubsetOfForm = DataFormatter.validateFormDataSchema(submittedData, formXfaData);
 
             if (!isDataSubsetOfForm) {
                 throw new IllegalArgumentException();
             }
 
+            // need to create a new input stream from the fileBytes
+            final var fileStream = new java.io.ByteArrayInputStream(fileBytes);
             final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
             final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
 
