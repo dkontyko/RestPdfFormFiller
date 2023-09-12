@@ -157,6 +157,9 @@ public class DataFormatter {
         final var dataSchema = generateJsonSchema(data);
 
 
+        // taking the lazy way for now
+
+        return formSchema.equals(dataSchema);
         // Is dataSchema a subset of formSchema?
 
         // Search for top node of dataSchema in formSchema.
