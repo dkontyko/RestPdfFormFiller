@@ -6,20 +6,24 @@ name: Java CI with Maven
 on:
   pull_request:
     branches: [ main ]
-    paths:
-      - 'FunctionApp/**'
   workflow_dispatch:
+  workflow_call:
 
 env:
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
+  changes:
+    uses: ./.github/workflows/filter-changes.yml
+
   build:
+    needs: changes
+    if: ${{ needs.changes.outputs.function-app == 'true' }}
     runs-on: windows-latest
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v3
