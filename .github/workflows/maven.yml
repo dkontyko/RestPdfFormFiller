@@ -14,12 +14,8 @@ env:
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
-  changes:
-    uses: ./.github/workflows/filter-changes.yml
-
+  
   build:
-    needs: changes
-    if: ${{ needs.changes.outputs.function-app == 'true' }}
     runs-on: windows-latest
     steps:
       - name: 'Checkout GitHub Action'
@@ -40,4 +36,3 @@ jobs:
           popd
       - name: Build with Maven
         run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
-        

@@ -12,6 +12,9 @@ jobs:
     outputs:
       function-app: ${{ steps.filter.outputs.function-app }}
     steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+        
       - name: filter
         id: filter
         uses: dorny/paths-filter@v2
