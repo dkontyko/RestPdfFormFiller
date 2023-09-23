@@ -18,9 +18,14 @@ jobs:
   changes:
     uses: ./.github/workflows/filter-changes.yml
 
-  analyze:
+  build:
     needs: changes
     if: ${{ needs.changes.outputs.function-app == 'true' }}
+    uses: ./.github/workflows/maven.yml
+
+  analyze:
+    needs: build
+    if: ${{ success() }}
     name: Analyze
     runs-on: windows-latest
     timeout-minutes: 30
@@ -35,30 +40,11 @@ jobs:
         language: [ 'java' ]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v2
         with:
           languages: ${{ matrix.language }}
-
-      # Autobuild doesn't work.
-      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'microsoft'
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-      - name: 'Restore Project Dependencies Using Mvn'
-        shell: pwsh
-        run: |
-          pushd './${{ env.PACKAGE_DIRECTORY }}'
-          mvn clean package
-          popd
-      - name: Build with Maven
-        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
