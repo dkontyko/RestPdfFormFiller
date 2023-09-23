@@ -7,11 +7,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'FunctionApp/**'
   workflow_dispatch:
 
 env:
   AZURE_FUNCTIONAPP_NAME: restpdfformfiller # set this to your function app name on Azure
-  PACKAGE_DIRECTORY: '.' # set this to the directory which contains pom.xml file
+  PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
