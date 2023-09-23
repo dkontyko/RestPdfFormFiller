@@ -49,3 +49,5 @@ jobs:
         # https://github.com/marketplace/actions/maven-dependency-tree-dependency-submission
       - name: Submit Dependency Snapshot
         uses: advanced-security/maven-dependency-submission-action@v3
+        with:
+          directory: '${{ env.PACKAGE_DIRECTORY }}'
