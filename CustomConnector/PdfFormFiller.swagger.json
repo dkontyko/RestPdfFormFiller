@@ -98,26 +98,14 @@
             "schema": {
               "type": "object",
               "properties": {
-                "pdfContentBase64": {
+                "data": {
+                  "description": "JSON object of the data to fill the form with.",
+                  "type": "object"
+                },
+                "file": {
                   "description": "The PDF content in base64 (use SharePoint Get item body/$content).",
                   "type": "string",
                   "format": "bytes"
-                }
-              },
-              "x-ms-dynamic-schema": {
-                "operationId": "GetXfaFormSchema",
-                "parameters": {
-                  "bodyData": {
-                    "parameter": "pdfContentBase64"
-                  }
-                }
-              },
-              "x-ms-dynamic-properties": {
-                "operationId": "GetXfaFormSchema",
-                "parameters": {
-                  "bodyData": {
-                    "parameterReference": "bodyData/pdfContentBase64"
-                  }
                 }
               }
             }
