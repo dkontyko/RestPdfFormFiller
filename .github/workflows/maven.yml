@@ -6,10 +6,12 @@ name: Java CI with Maven
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'FunctionApp/**'
   workflow_dispatch:
-  
+
 env:
-  PACKAGE_DIRECTORY: '.' # set this to the directory which contains pom.xml file
+  PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
@@ -33,5 +35,5 @@ jobs:
           mvn clean package
           popd
       - name: Build with Maven
-        run: mvn -B package --file pom.xml
+        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
         
