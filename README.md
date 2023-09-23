@@ -6,23 +6,23 @@
 
 [![Java CI with Maven](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml/badge.svg)](https://github.com/dkontyko/RestPdfFormFiller/actions/workflows/maven.yml)
 
-# Project Structure
-## HttpTriggerFunctions
+## Function App Structure
+### HttpTriggerFunctions
 Holds the  Azure Function App endpoints. Handles HTTP requests and builds responses.
 
-## RestPdfApi
+### RestPdfApi
 Holds the static methods that perform the actual PDF operations.
 
-# Azure Function Endpoints
-## GetXfaData (HTTP POST)
+## Azure Function Endpoints
+### GetXfaData (HTTP POST)
 Given an XFAF PDF form, extracts and returns the datasets node as either XML or JSON.
 
-### Parameters
+#### Parameters
 * format: Query parameter that must be either "xml" or "json".
 * bodyData: The POST body must be the base64-encoded bytes of the PDF file. For Power Automate, you can use the SharePoint Get file content action and reference body/$content.
 
-## GetXfaSchema (HTTP POST)
+### GetXfaSchema (HTTP POST)
 Given an XFAF PDF form (same at GetXfaData), returns the basic XML schema of the form.
 
-## Fill Form (Not implemented)
+### Fill Form (Not implemented)
 Given a PDF form and a JSON object of field values, returns the PDF form with the given fields containing the values passed in the JSON object.
