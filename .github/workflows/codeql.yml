@@ -4,13 +4,19 @@ name: "CodeQL"
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'FunctionApp/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ "main" ]
+    paths:
+      - 'FunctionApp/**'
+  schedule:
+    - cron: '29 3 * * 2'
 
 env:
   JAVA_VERSION: '17'
-  PACKAGE_DIRECTORY: '.'
+  PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
   analyze:
@@ -51,7 +57,7 @@ jobs:
           mvn clean package
           popd
       - name: Build with Maven
-        run: mvn -B package --file pom.xml
+        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
