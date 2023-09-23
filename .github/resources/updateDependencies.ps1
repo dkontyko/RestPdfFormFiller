@@ -19,8 +19,8 @@ git checkout -b $branchName
 
 mvn versions:use-latest-versions -DgenerateBackupPoms=false -f FunctionApp/pom.xml
 
-git config user.email "runner@github.com"
-git config user.name "GitHub Runner"
+git config user.email "Actions@github.com"
+git config user.name "GitHub Actions"
 
 # Commit the changes to the branch
 git add FunctionApp/pom.xml
