@@ -1,0 +1,20 @@
+name: "Filter Changes"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      function-app: ${{ steps.filter.outputs.function-app }}
+    steps:
+      - name: filter
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            function-app:
+              - 'FunctionApp/**'

@@ -7,8 +7,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'FunctionApp/**'
   workflow_dispatch:
 
 env:
@@ -17,7 +15,24 @@ env:
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      function-app: ${{ steps.filter.outputs.function-app }}
+    steps:
+      - name: filter
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            function-app:
+              - 'FunctionApp/**'  
+
   build-and-deploy:
+    needs: changes
+    if: ${{ needs.changes.outputs.function-app == 'true' }}
     runs-on: windows-latest
     steps:
       - name: 'Checkout GitHub Action'

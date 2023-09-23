@@ -4,13 +4,9 @@ name: "CodeQL"
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - 'FunctionApp/**'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ "main" ]
-    paths:
-      - 'FunctionApp/**'
   schedule:
     - cron: '29 3 * * 2'
 
@@ -19,7 +15,24 @@ env:
   PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      function-app: ${{ steps.filter.outputs.function-app }}
+    steps:
+      - name: filter
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            function-app:
+              - 'FunctionApp/**'  
+
   analyze:
+    needs: changes
+    if: ${{ needs.changes.outputs.function-app == 'true' }}
     name: Analyze
     runs-on: windows-latest
     timeout-minutes: 30
