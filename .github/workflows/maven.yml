@@ -7,6 +7,7 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  workflow_call:
 
 env:
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
@@ -14,19 +15,7 @@ env:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      function-app: ${{ steps.filter.outputs.function-app }}
-    steps:
-      - name: filter
-        id: filter
-        uses: dorny/paths-filter@v2
-        with:
-          filters: |
-            function-app:
-              - 'FunctionApp/**'
+    uses: ./.github/workflows/filter-changes.yml
 
   build:
     needs: changes
@@ -34,7 +23,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v3
