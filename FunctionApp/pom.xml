@@ -26,12 +26,12 @@
         <dependency>
             <groupId>com.microsoft.graph</groupId>
             <artifactId>microsoft-graph</artifactId>
-            <version>5.70.0</version>
+            <version>5.71.0</version>
         </dependency>
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-identity</artifactId>
-            <version>1.10.1</version>
+            <version>1.11.0-beta.1</version>
         </dependency>
 
         <dependency>
