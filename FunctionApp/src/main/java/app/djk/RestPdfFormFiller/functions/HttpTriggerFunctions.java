@@ -98,14 +98,11 @@ public class HttpTriggerFunctions {
             HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context) {
 
-
-
         /*
             New plan:
             Send giant JSON object in body with the form data and the PDF file.
             The JSON object will have the following structure:
             {
-
                 "data": {
                     "field1": "value1",
                     "field2": "value2",
@@ -113,9 +110,7 @@ public class HttpTriggerFunctions {
                 }
                 "file": "base64 encoded PDF file",
             }
-
          */
-
         return errorHandler(request, context, () -> {
 
             //final var fileStream = getFileInputStreamFromSpo(request);
