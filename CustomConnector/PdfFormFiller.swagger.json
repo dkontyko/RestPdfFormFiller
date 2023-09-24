@@ -56,12 +56,6 @@
             "type": "string"
           },
           {
-            "name": "x-functions-key",
-            "required": true,
-            "in": "header",
-            "type": "string"
-          },
-          {
             "name": "pdfContentBase64",
             "description": "File content in base64 (use body/$content from SharePoint Get file action)",
             "in": "body",
@@ -97,12 +91,6 @@
         ],
         "operationId": "FillXfaData",
         "parameters": [
-          {
-            "name": "x-functions-key",
-            "required": true,
-            "in": "header",
-            "type": "string"
-          },
           {
             "name": "bodyData",
             "in": "body",
@@ -150,12 +138,6 @@
         ],
         "parameters": [
           {
-            "name": "x-functions-key",
-            "required": true,
-            "in": "header",
-            "type": "string"
-          },
-          {
             "name": "bodyData",
             "in": "body",
             "required": true,
@@ -173,14 +155,10 @@
   "parameters": {},
   "responses": {},
   "securityDefinitions": {
-    "oauth2-auth": {
-      "type": "oauth2",
-      "flow": "accessCode",
-      "authorizationUrl": "https://login.microsoftonline.com/common/oauth2/authorize",
-      "tokenUrl": "https://login.windows.net/common/oauth2/authorize",
-      "scopes": {
-        "https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/User.Read https://graph.microsoft.com/openid": "https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/User.Read https://graph.microsoft.com/openid"
-      }
+    "api_key": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "x-functions-key"
     }
   },
   "security": [
