@@ -1,9 +1,9 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "PdfFormFiller2",
+    "title": "PdfFormFiller",
     "description": "Allows filling and retrieving data from selected forms. (DEV VERSION)",
-    "version": "0.1"
+    "version": "0.5"
   },
   "host": "restpdfformfiller-dev.azurewebsites.net",
   "basePath": "/api/",
@@ -56,6 +56,12 @@
             "type": "string"
           },
           {
+            "name": "x-functions-key",
+            "required": true,
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "pdfContentBase64",
             "description": "File content in base64 (use body/$content from SharePoint Get file action)",
             "in": "body",
@@ -92,6 +98,12 @@
         "operationId": "FillXfaData",
         "parameters": [
           {
+            "name": "x-functions-key",
+            "required": true,
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "bodyData",
             "in": "body",
             "required": true,
@@ -123,7 +135,7 @@
             "description": "default",
             "schema": {
               "title": "formSchema",
-              "type": "string"
+              "type": "object"
             }
           }
         },
@@ -133,9 +145,16 @@
           "text/plain"
         ],
         "produces": [
-          "application/json"
+          "application/json",
+          "text/plain"
         ],
         "parameters": [
+          {
+            "name": "x-functions-key",
+            "required": true,
+            "in": "header",
+            "type": "string"
+          },
           {
             "name": "bodyData",
             "in": "body",
@@ -146,7 +165,7 @@
           }
         ],
         "operationId": "GetXfaFormSchema",
-        "x-ms-visibility": "internal"
+        "x-ms-visibility": "important"
       }
     }
   },
@@ -154,15 +173,21 @@
   "parameters": {},
   "responses": {},
   "securityDefinitions": {
-    "API Key": {
-      "type": "apiKey",
-      "in": "header",
-      "name": "x-functions-key"
+    "oauth2-auth": {
+      "type": "oauth2",
+      "flow": "accessCode",
+      "authorizationUrl": "https://login.microsoftonline.com/common/oauth2/authorize",
+      "tokenUrl": "https://login.windows.net/common/oauth2/authorize",
+      "scopes": {
+        "https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/User.Read https://graph.microsoft.com/openid": "https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/User.Read https://graph.microsoft.com/openid"
+      }
     }
   },
   "security": [
     {
-      "API Key": []
+      "oauth2-auth": [
+        "https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/User.Read https://graph.microsoft.com/openid"
+      ]
     }
   ],
   "tags": []
