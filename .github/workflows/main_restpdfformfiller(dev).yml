@@ -24,6 +24,9 @@ jobs:
     if: ${{ success() }}
     runs-on: windows-latest
     steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
         id: fa
@@ -31,11 +34,12 @@ jobs:
           app-name: 'restpdfformfiller'
           slot-name: 'dev'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_2809551214454B81BB4D28673CCAEE70 }}
-          package: 'D:\a\RestPdfFormFiller\RestPdfFormFiller\FunctionApp\target\azure-functions'
+          package: './FunctionApp'
           respect-pom-xml: true
         # Generate GitHub Maven Dependency Tree
         # https://github.com/marketplace/actions/maven-dependency-tree-dependency-submission
+
       - name: Submit Dependency Snapshot
         uses: advanced-security/maven-dependency-submission-action@v3
         with:
-          directory: 'D:\a\RestPdfFormFiller\RestPdfFormFiller\FunctionApp\target\azure-functions'
+          directory: './FunctionApp'
