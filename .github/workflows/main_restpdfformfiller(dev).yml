@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'FunctionApp/**'
   workflow_dispatch:
 
 env:
@@ -12,14 +14,12 @@ env:
   JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
-  changes:
-    uses: ./.github/workflows/filter-changes.yml
-
   deploy-and-submit-dependencies:
-    needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.function-app == 'true' }}
     runs-on: windows-latest
     steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v3
         with:
@@ -28,7 +28,7 @@ jobs:
           cache: maven
 
       - name: 'Restore Project Dependencies Using Mvn'
-        shell: pwsh # For Linux, use bash
+        shell: pwsh
         run: |
           pushd './${{ env.PACKAGE_DIRECTORY }}'
           mvn clean package
