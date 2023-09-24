@@ -31,11 +31,11 @@ jobs:
           app-name: 'restpdfformfiller'
           slot-name: 'dev'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_2809551214454B81BB4D28673CCAEE70 }}
-          package: '.'
+          package: '.\FunctionApp'
           respect-pom-xml: true
         # Generate GitHub Maven Dependency Tree
         # https://github.com/marketplace/actions/maven-dependency-tree-dependency-submission
       - name: Submit Dependency Snapshot
         uses: advanced-security/maven-dependency-submission-action@v3
         with:
-          directory: './${{ env.PACKAGE_DIRECTORY }}'
+          directory: '.\${{ env.PACKAGE_DIRECTORY }}'
