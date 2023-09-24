@@ -34,5 +34,12 @@ jobs:
           pushd './${{ env.PACKAGE_DIRECTORY }}'
           mvn clean package
           popd
+
       - name: Build with Maven
         run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: app
+          path: target/app.jar
