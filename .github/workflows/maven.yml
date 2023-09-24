@@ -41,5 +41,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: app
-          path: target/app.jar
+          name: RestPdfFormFiller-0.1.0.jar
+          path: 'FunctionApp/target/azure-functions/RestPdfFormFiller-1654224697708/RestPdfFormFiller-0.1.0.jar'
