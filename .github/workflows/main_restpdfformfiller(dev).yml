@@ -4,38 +4,49 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'FunctionApp/**'
   workflow_dispatch:
 
 env:
   AZURE_FUNCTIONAPP_NAME: restpdfformfiller # set this to your function app name on Azure
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
+  JAVA_VERSION: '17' # set this to the java version to use
 
 jobs:
-  changes:
-    uses: ./.github/workflows/filter-changes.yml
-
-  build:
-    needs: changes
-    if: ${{ needs.changes.outputs.function-app == 'true' }}
-    uses: ./.github/workflows/maven.yml
-
   deploy-and-submit-dependencies:
-    needs: build
-    if: ${{ success() }}
     runs-on: windows-latest
     steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v4
+
+      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'microsoft'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: 'Restore Project Dependencies Using Mvn'
+        shell: pwsh
+        run: |
+          pushd './${{ env.PACKAGE_DIRECTORY }}'
+          mvn clean package
+          popd
+
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
         id: fa
         with:
-          app-name: 'restpdfformfiller'
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           slot-name: 'dev'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_2809551214454B81BB4D28673CCAEE70 }}
-          package: '${{ env.PACKAGE_DIRECTORY }}'
+          package: ${{ env.PACKAGE_DIRECTORY }}
           respect-pom-xml: true
+
         # Generate GitHub Maven Dependency Tree
         # https://github.com/marketplace/actions/maven-dependency-tree-dependency-submission
       - name: Submit Dependency Snapshot
         uses: advanced-security/maven-dependency-submission-action@v3
         with:
-          directory: '${{ env.PACKAGE_DIRECTORY }}'
+          directory: './${{ env.PACKAGE_DIRECTORY }}'
