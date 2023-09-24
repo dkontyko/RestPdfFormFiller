@@ -39,7 +39,7 @@ jobs:
         run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: RestPdfFormFiller-0.1.0.jar
           path: 'FunctionApp/target/azure-functions/RestPdfFormFiller-1654224697708/RestPdfFormFiller-0.1.0.jar'
