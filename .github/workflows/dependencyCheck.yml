@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GH_TOKEN: ${{ secrets.DEPENDENCY_CHECK_TOKEN }}
 
 permissions:
   contents: write
