@@ -103,7 +103,7 @@
                   "type": "object"
                 },
                 "file": {
-                  "description": "The PDF content in base64 (use SharePoint Get item body/$content).",
+                  "description": "The PDF content in base64 (use body/$content from SharePoint Get file action).",
                   "type": "string",
                   "format": "bytes"
                 }
