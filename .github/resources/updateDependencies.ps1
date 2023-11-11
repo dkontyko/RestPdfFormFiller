@@ -5,7 +5,7 @@ $mavenDisplayDependenciesCmd = "mvn versions:display-dependency-updates -Dproces
 $output = Invoke-Expression $mavenDisplayDependenciesCmd
 
 # Parse the output to find any updated dependencies
-$updatedDependencies = ($output | Select-String " -> " | ForEach-Object { $_.Line -replace " -> ", "" })
+$updatedDependencies = ($output | Select-String " -> ")
 
 # If there are no updated dependencies, exit the script
 if ($updatedDependencies.Count -eq 0) {
