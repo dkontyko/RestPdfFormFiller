@@ -18,9 +18,17 @@ jobs:
   changes:
     uses: ./.github/workflows/filter-changes.yml
 
+  debugJob:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug
+        run: |
+          echo "Function App: ${{ needs.changes.outputs.function-app }}"
+
   build:
     needs: changes
-    if: ${{ needs.changes.outputs.function-app == true }}
+    if: ${{ needs.changes.outputs.function-app == 'true' }}
     uses: ./.github/workflows/maven.yml
 
   analyze:
