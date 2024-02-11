@@ -3,6 +3,13 @@ name: "Filter Changes"
 on:
   workflow_dispatch:
   workflow_call:
+    outputs:
+      functionApp:
+        description: "Whether the FunctionApp directory has changed"
+        value: ${{ jobs.changes.outputs.functionApp }}
+      testOutput:
+        description: "Test output"
+        value: ${{ jobs.changes.outputs.testOutput }}
 
 jobs:
   changes:
