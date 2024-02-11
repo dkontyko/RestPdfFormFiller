@@ -15,20 +15,20 @@ env:
   PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
-  changes:
+  checkChanges:
     uses: ./.github/workflows/filter-changes.yml
 
   debugJob:
-    needs: changes
+    needs: checkChanges
     runs-on: ubuntu-latest
     steps:
       - name: Debug
         run: |
-          echo "Function App: ${{ needs.changes.outputs.functionApp }}"
+          echo "Function App: ${{ needs.checkChanges.outputs.functionApp }}"
 
   build:
-    needs: changes
-    if: ${{ needs.changes.outputs.functionApp == 'true' }}
+    needs: checkChanges
+    if: ${{ needs.checkChanges.outputs.functionApp == 'true' }}
     uses: ./.github/workflows/maven.yml
 
   analyze:
