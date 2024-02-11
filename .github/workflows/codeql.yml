@@ -20,7 +20,7 @@ jobs:
 
   build:
     needs: changes
-    if: ${{ needs.changes.outputs.function-app == 'true' }}
+    if: ${{ needs.changes.outputs.function-app == true }}
     uses: ./.github/workflows/maven.yml
 
   analyze:
