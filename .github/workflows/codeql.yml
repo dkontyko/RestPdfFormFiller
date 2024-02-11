@@ -22,9 +22,13 @@ jobs:
     needs: checkChanges
     runs-on: ubuntu-latest
     steps:
-      - name: Debug
+      - name: Debug functionApp
         run: |
           echo "Function App: ${{ needs.checkChanges.outputs.functionApp }}"
+
+      - name: Debug testOutput
+        run: |
+          echo "Function App: ${{ needs.checkChanges.outputs.testOutput }}"
 
   build:
     needs: checkChanges
