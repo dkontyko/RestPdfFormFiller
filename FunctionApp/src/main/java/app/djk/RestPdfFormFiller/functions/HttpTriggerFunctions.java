@@ -268,7 +268,9 @@ public class HttpTriggerFunctions {
     }
 
     private static <T> InputStream getFileInputStreamFromSpo(final HttpRequestMessage<T> request) {
+        throw new UnsupportedOperationException("Retrieving files from SPO is not yet implemented.");
         // validating query input parameters by casting them to their requisite types.
+        /*
         final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
         final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
         final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
@@ -294,6 +296,8 @@ public class HttpTriggerFunctions {
         Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
 
         return fileStream;
+
+         */
     }
 
     private static <T> String getAuthTokenOverHttp(final HttpRequestMessage<T> request, final ExecutionContext context) {
