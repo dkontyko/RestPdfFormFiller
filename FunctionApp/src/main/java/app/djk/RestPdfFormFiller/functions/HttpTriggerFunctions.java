@@ -6,15 +6,15 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import com.azure.core.credential.TokenCredential;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.identity.OnBehalfOfCredentialBuilder;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
-import com.microsoft.graph.core.ClientException;
-import com.microsoft.graph.requests.GraphServiceClient;
+import com.microsoft.graph.serviceclient.GraphServiceClient;
+import com.microsoft.kiota.ApiException;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -197,7 +197,7 @@ public class HttpTriggerFunctions {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
         }
         // Dependency and built-in exceptions
-        catch (ClientException e) {
+        catch (ApiException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Could not retrieve file.").build();
         } catch (NumberFormatException e) {
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
@@ -247,17 +247,16 @@ public class HttpTriggerFunctions {
      * @return A token credential auth provider generated from either the default Azure credential or
      * an on-behalf-of credential.
      */
-    private static <T> TokenCredentialAuthProvider getTokenCredAuthProv(final HttpRequestMessage<T> request) {
+    private static <T> TokenCredential getTokenCredential(final HttpRequestMessage<T> request) {
         final var authHeader = request.getHeaders().get("authorization");
 
         if (authHeader == null) {
             // Right now this is limited to local test cases
-            return new TokenCredentialAuthProvider(new DefaultAzureCredentialBuilder().build());
+            return new DefaultAzureCredentialBuilder().build();
         } else {
             final var incomingAccessToken = authHeader.substring(7); // removing "Bearer" prefix and space
-            final var scopes = Collections.singletonList("https://graph.microsoft.com/.default");
 
-            final var oboCredential = new OnBehalfOfCredentialBuilder()
+            return new OnBehalfOfCredentialBuilder()
                     .tenantId(System.getenv("tenantId"))
                     .clientId(System.getenv("clientId"))
                     .clientSecret(System.getenv("clientSecret"))
@@ -265,36 +264,40 @@ public class HttpTriggerFunctions {
                     .additionallyAllowedTenants(Collections.singletonList("*"))
                     .build();
 
-            return new TokenCredentialAuthProvider(scopes, oboCredential);
-
         }
     }
 
     private static <T> InputStream getFileInputStreamFromSpo(final HttpRequestMessage<T> request) {
+        throw new UnsupportedOperationException("Retrieving files from SPO is not yet implemented.");
         // validating query input parameters by casting them to their requisite types.
+        /*
         final var siteID = validateSiteID(request.getQueryParameters().getOrDefault("siteID", ""));
         final var listID = UUID.fromString(request.getQueryParameters().getOrDefault("listID", ""));
         final var itemID = Integer.parseInt(request.getQueryParameters().getOrDefault("itemID", ""));
 
-        final var tokenCredential = getTokenCredAuthProv(request);
-        final GraphServiceClient<Request> graphClient = GraphServiceClient
-                .builder()
-                .authenticationProvider(tokenCredential)
-                .buildClient();
+        final var tokenCredential = getTokenCredential(request);
+        final GraphServiceClient graphClient = new GraphServiceClient(
+                tokenCredential,
+                "https://graph.microsoft.com/.default"
+        );
 
         final var result = graphClient
-                .sites(siteID)
-                .lists(listID.toString())
-                .items(Integer.toString(itemID))
+                .sites()
+                .bySiteId(siteID)
+                .lists()
+                .byListId(listID.toString())
+                .items()
+                .byListItemId(Integer.toString(itemID))
                 .driveItem()
-                .content()
-                .buildRequest();
+                .content();
 
         final var fileStream = result.get();
 
         Objects.requireNonNull(fileStream, "Could not retrieve file stream.");
 
         return fileStream;
+
+         */
     }
 
     private static <T> String getAuthTokenOverHttp(final HttpRequestMessage<T> request, final ExecutionContext context) {
