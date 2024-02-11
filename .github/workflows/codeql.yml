@@ -45,7 +45,7 @@ jobs:
       # AFAIk, this is unavaoidable, since the CodeQL actions
       # must be run in the same job as build actions.
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'microsoft'
           java-version: ${{ env.JAVA_VERSION }}
