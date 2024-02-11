@@ -37,3 +37,9 @@ jobs:
 
       - name: Build with Maven
         run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: FunctionApp
+          path: ${{ env.PACKAGE_DIRECTORY }}/target/*.jar
