@@ -51,7 +51,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: FunctionApp
-          path: ${{ env.PACKAGE_DIRECTORY }}/target/*.jar
+          path: ${{ env.PACKAGE_DIRECTORY }}/target/
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
