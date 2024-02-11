@@ -10,7 +10,7 @@ jobs:
     permissions:
       pull-requests: read
     outputs:
-      function-app: ${{ steps.filter.outputs.function-app }}
+      functionApp: ${{ steps.filter.outputs.functionApp }}
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
@@ -20,5 +20,5 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            function-app:
+            functionApp:
               - 'FunctionApp/**'

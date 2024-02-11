@@ -24,11 +24,11 @@ jobs:
     steps:
       - name: Debug
         run: |
-          echo "Function App: ${{ needs.changes.outputs.function-app }}"
+          echo "Function App: ${{ needs.changes.outputs.functionApp }}"
 
   build:
     needs: changes
-    if: ${{ needs.changes.outputs.function-app == 'true' }}
+    if: ${{ needs.changes.outputs.functionApp == 'true' }}
     uses: ./.github/workflows/maven.yml
 
   analyze:
