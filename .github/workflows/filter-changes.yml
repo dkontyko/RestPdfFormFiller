@@ -7,9 +7,6 @@ on:
       functionApp:
         description: "Whether the FunctionApp directory has changed"
         value: ${{ jobs.changes.outputs.functionApp }}
-      testOutput:
-        description: "Test output"
-        value: ${{ jobs.changes.outputs.testOutput }}
 
 jobs:
   changes:
@@ -18,7 +15,6 @@ jobs:
       pull-requests: read
     outputs:
       functionApp: ${{ steps.filter.outputs.functionApp }}
-      testOutput: "My test output"
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4

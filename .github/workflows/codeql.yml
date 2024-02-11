@@ -18,18 +18,6 @@ jobs:
   checkChanges:
     uses: ./.github/workflows/filter-changes.yml
 
-  debugJob:
-    needs: checkChanges
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug functionApp
-        run: |
-          echo "Function App: ${{ needs.checkChanges.changes.outputs.functionApp }}"
-
-      - name: Debug testOutput
-        run: |
-          echo "Function App: ${{ needs.checkChanges.changes.outputs.testOutput }}"
-
   build:
     needs: checkChanges
     if: ${{ needs.checkChanges.outputs.functionApp == 'true' }}
