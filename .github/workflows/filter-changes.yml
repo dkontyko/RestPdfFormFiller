@@ -3,6 +3,10 @@ name: "Filter Changes"
 on:
   workflow_dispatch:
   workflow_call:
+    outputs:
+      functionApp:
+        description: "Whether the FunctionApp directory has changed"
+        value: ${{ jobs.changes.outputs.functionApp }}
 
 jobs:
   changes:
@@ -10,15 +14,15 @@ jobs:
     permissions:
       pull-requests: read
     outputs:
-      function-app: ${{ steps.filter.outputs.function-app }}
+      functionApp: ${{ steps.filter.outputs.functionApp }}
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
         
       - name: filter
         id: filter
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         with:
           filters: |
-            function-app:
+            functionApp:
               - 'FunctionApp/**'

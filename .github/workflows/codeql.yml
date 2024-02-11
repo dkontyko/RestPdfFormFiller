@@ -15,38 +15,46 @@ env:
   PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
-  changes:
+  checkChanges:
     uses: ./.github/workflows/filter-changes.yml
 
-  build:
-    needs: changes
-    if: ${{ needs.changes.outputs.function-app == true }}
-    uses: ./.github/workflows/maven.yml
-
   analyze:
-    needs: build
-    if: ${{ success() }}
+    needs: checkChanges
+    if: ${{ needs.checkChanges.outputs.functionApp == 'true' }}
     name: Analyze
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
-      actions: read
-      contents: read
       security-events: write
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'java' ]
+        language: [ 'java-kotlin' ]
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
+      # AFAIk, this is unavaoidable, since the CodeQL actions
+      # must be run in the same job as build actions.
+      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'microsoft'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{matrix.language}}"
