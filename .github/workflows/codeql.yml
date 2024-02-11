@@ -18,14 +18,9 @@ jobs:
   checkChanges:
     uses: ./.github/workflows/filter-changes.yml
 
-  build:
+  analyze:
     needs: checkChanges
     if: ${{ needs.checkChanges.outputs.functionApp == 'true' }}
-    uses: ./.github/workflows/maven.yml
-
-  analyze:
-    needs: build
-    if: ${{ success() }}
     name: Analyze
     runs-on: windows-latest
     timeout-minutes: 30
@@ -47,11 +42,17 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Download artifact
-        uses: actions/download-artifact@v2
+      # AFAIk, this is unavaoidable, since the CodeQL actions
+      # must be run in the same job as build actions.
+      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v3
         with:
-          name: FunctionApp
-          path: ${{ env.PACKAGE_DIRECTORY }}/target/
+          distribution: 'microsoft'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
