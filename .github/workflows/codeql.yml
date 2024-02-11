@@ -24,11 +24,11 @@ jobs:
     steps:
       - name: Debug functionApp
         run: |
-          echo "Function App: ${{ needs.checkChanges.outputs.functionApp }}"
+          echo "Function App: ${{ needs.checkChanges.changes.outputs.functionApp }}"
 
       - name: Debug testOutput
         run: |
-          echo "Function App: ${{ needs.checkChanges.outputs.testOutput }}"
+          echo "Function App: ${{ needs.checkChanges.changes.outputs.testOutput }}"
 
   build:
     needs: checkChanges
