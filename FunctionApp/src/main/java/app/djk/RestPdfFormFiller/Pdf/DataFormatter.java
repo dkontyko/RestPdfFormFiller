@@ -3,8 +3,10 @@ package app.djk.RestPdfFormFiller.Pdf;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormDataException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.jetbrains.annotations.NotNull;
@@ -27,6 +29,8 @@ public class DataFormatter {
 
     private static JsonNode convertXmlToJsonNode(String xml) throws JsonProcessingException {
         final var xmlMapper = new XmlMapper();
+        xmlMapper.enable(SerializationFeature.WRAP_ROOT_VALUE);
+        xmlMapper.enable(DeserializationFeature.UNWRAP_ROOT_VALUE);
         return xmlMapper.readTree(xml);
     }
 
