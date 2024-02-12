@@ -13,12 +13,10 @@ import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import com.microsoft.graph.serviceclient.GraphServiceClient;
 import com.microsoft.kiota.ApiException;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import com.microsoft.graph.core.ClientException;
 
 import java.io.IOException;
 import java.io.InputStream;
