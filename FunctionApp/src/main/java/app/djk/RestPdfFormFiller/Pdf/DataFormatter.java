@@ -14,12 +14,13 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.StringWriter;
 
 public class DataFormatter {
+    private DataFormatter() { throw new IllegalStateException("Utility class"); }
+
     public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
         return convertXmlToJsonNode(xml).toPrettyString();
 
@@ -42,7 +43,7 @@ public class DataFormatter {
     public static String convertJsonToXmlString(String json) throws ParserConfigurationException, TransformerException {
         final var xmlDocument = convertJsonToXml(json);
 
-        final var transformer = TransformerFactory.newInstance().newTransformer();
+        final var transformer = SecureTransformerFactory.newInstance().newTransformer();
         transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
         transformer.setOutputProperty(OutputKeys.INDENT, "yes");
 
@@ -114,7 +115,7 @@ public class DataFormatter {
             @NotNull JsonNode jsonNode) {
 
         switch (jsonNode.getNodeType()) {
-            case OBJECT -> jsonNode.fields().forEachRemaining((entry) -> {
+            case OBJECT -> jsonNode.fields().forEachRemaining(entry -> {
                 final var childElement = xmlDocument.createElement(entry.getKey());
                 element.appendChild(childElement);
                 convertJsonNodeToXmlElement(xmlDocument, childElement, entry.getValue());
@@ -166,7 +167,7 @@ public class DataFormatter {
 
             // recursing on the child nodes and feeding their schemas into the properties schema node
             var sourceChildren = sourceNode.fields();
-            sourceChildren.forEachRemaining((entry) -> {
+            sourceChildren.forEachRemaining(entry -> {
                 var childSchema = generateJsonSchema(entry.getValue());
                 schemaObjectProperties.set(entry.getKey(), childSchema);
             });
