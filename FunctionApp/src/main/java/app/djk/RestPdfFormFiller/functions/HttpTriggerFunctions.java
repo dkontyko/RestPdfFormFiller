@@ -21,6 +21,7 @@ import okhttp3.Request;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.logging.Level;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -176,9 +177,9 @@ public class HttpTriggerFunctions {
              to its original type. So that's what the inner try-catch block does, until I find a
              better way.
             */
-            try {
+            try { //NOSONAR
                 return function.get();
-            } catch (Exception e) {
+            } catch (Exception e) { //NOSONAR
                 context.getLogger().warning("Caught exception: " + e);
                 context.getLogger().warning(Arrays.toString(e.getStackTrace()));
                 var eClass = e.getClass();
@@ -307,7 +308,7 @@ public class HttpTriggerFunctions {
         }
 
         final var incomingToken = authHeader.substring(7); // removing "Bearer" prefix and space
-        context.getLogger().info("Incoming token: " + incomingToken);
+        context.getLogger().log(Level.FINEST, "Incoming token: {}", incomingToken);
 
         final var client = new OkHttpClient();
 
@@ -319,7 +320,7 @@ public class HttpTriggerFunctions {
                 .add("scope", "https://graph.microsoft.com/.default")
                 .add("requested_token_use", "on_behalf_of")
                 .build();
-        context.getLogger().info("Form body: " + formBody.toString());
+        context.getLogger().log(Level.FINEST, "Form body: {}", formBody);
 
         final var outgoingRequest = new Request.Builder()
                 .url("https://login.microsoftonline.com/" + System.getenv("tenantId") + "/oauth2/v2.0/token")
@@ -329,7 +330,7 @@ public class HttpTriggerFunctions {
         try (final var response = client.newCall(outgoingRequest).execute()) {
             context.getLogger().info("Executed outgoing request.");
             final var responseString = Objects.requireNonNull(response.body()).string();
-            System.out.println(responseString);
+            context.getLogger().log(Level.FINEST, "Response: {}", responseString);
             return "test";
         } catch (IOException e) {
             throw new RuntimeException(e);

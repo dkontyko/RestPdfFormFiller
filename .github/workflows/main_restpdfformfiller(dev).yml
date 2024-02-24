@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'microsoft'
           java-version: ${{ env.JAVA_VERSION }}
@@ -47,6 +47,6 @@ jobs:
         # Generate GitHub Maven Dependency Tree
         # https://github.com/marketplace/actions/maven-dependency-tree-dependency-submission
       - name: Submit Dependency Snapshot
-        uses: advanced-security/maven-dependency-submission-action@v3
+        uses: advanced-security/maven-dependency-submission-action@v4
         with:
           directory: './${{ env.PACKAGE_DIRECTORY }}'

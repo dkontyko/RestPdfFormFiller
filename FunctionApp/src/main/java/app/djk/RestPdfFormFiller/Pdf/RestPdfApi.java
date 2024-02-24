@@ -9,15 +9,17 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.List;
 
 public class RestPdfApi {
-    public static final ArrayList<String> FORM_DATA_FORMATS = new ArrayList<>(Arrays.asList("json", "xml"));
+
+    private RestPdfApi() {
+        throw new IllegalStateException("Utility class");
+    }
+    public static final List<String> FORM_DATA_FORMATS = List.of("json", "xml");
 
     /**
      * Gets the XML form field data from the given DA 4187. (This may work with other XFA forms, but
@@ -33,7 +35,7 @@ public class RestPdfApi {
             //This is the node that contains the XFA form data.
             final var datasetsNode = newReader.getAcroFields().getXfa().getDatasetsNode();
 
-            final var transformer = TransformerFactory.newInstance().newTransformer();
+            final var transformer = SecureTransformerFactory.newInstance().newTransformer();
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
 
