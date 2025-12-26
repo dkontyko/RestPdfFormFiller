@@ -1,9 +1,9 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.lowagie.text.pdf.PdfReader;
-import com.lowagie.text.pdf.PdfStamper;
-import com.lowagie.text.pdf.XfaForm;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.PdfStamper;
+import org.openpdf.text.pdf.XfaForm;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;

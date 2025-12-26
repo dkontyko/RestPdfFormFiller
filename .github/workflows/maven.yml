@@ -11,7 +11,7 @@ on:
 
 env:
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
-  JAVA_VERSION: '17' # set this to the java version to use
+  JAVA_VERSION: '21' # set this to the java version to use
 
 jobs:
   
@@ -32,6 +32,6 @@ jobs:
         run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

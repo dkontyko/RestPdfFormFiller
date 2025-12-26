@@ -1,12 +1,10 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormDataException;
-import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeType;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeType;
+import tools.jackson.dataformat.xml.XmlMapper;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.Document;
 
@@ -19,14 +17,16 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.StringWriter;
 
 public class DataFormatter {
-    private DataFormatter() { throw new IllegalStateException("Utility class"); }
+    private DataFormatter() {
+        throw new IllegalStateException("Utility class");
+    }
 
-    public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
+    public static String convertXmlToJsonString(String xml) {
         return convertXmlToJsonNode(xml).toPrettyString();
 
     }
 
-    private static JsonNode convertXmlToJsonNode(String xml) throws JsonProcessingException {
+    private static JsonNode convertXmlToJsonNode(String xml) {
         final var xmlMapper = new XmlMapper();
         return xmlMapper.readTree(xml);
     }
@@ -34,11 +34,12 @@ public class DataFormatter {
     /**
      * Converts a JSON representation of XFA form data to a String XML representation.
      * This method wraps the {@link #convertJsonToXml(String)} method.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws TransformerException If there's a problem with transforming the XML document into a string.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws TransformerException         If there's a problem with transforming the XML document into a string.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static String convertJsonToXmlString(String json) throws ParserConfigurationException, TransformerException {
         final var xmlDocument = convertJsonToXml(json);
@@ -57,57 +58,55 @@ public class DataFormatter {
      * Converts a JSON representation of XFA form data to its XML form.
      * The root XML and data elements are hard-coded because they are constant.
      * This method recurses through the remaining JSON elements and creates the XML elements.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static Document convertJsonToXml(String json) throws ParserConfigurationException {
         final var xmlDocument = (DocumentBuilderFactory.newInstance()).newDocumentBuilder().newDocument();
 
-        try {
-            final var rootJsonNode = (new ObjectMapper()).readTree(json);
+        final var rootJsonNode = (new ObjectMapper()).readTree(json);
 
 
-            // Creating the root element that an XFA form expects.
-            // This element name is not expected to be in the JSON data object.
-            final var rootElement = xmlDocument.createElement("xfa:datasets");
-            rootElement.setAttribute("xmlns:xfa", "http://www.xfa.org/schema/xfa-data/1.0/");
-            xmlDocument.appendChild(rootElement);
+        // Creating the root element that an XFA form expects.
+        // This element name is not expected to be in the JSON data object.
+        final var rootElement = xmlDocument.createElement("xfa:datasets");
+        rootElement.setAttribute("xmlns:xfa", "http://www.xfa.org/schema/xfa-data/1.0/");
+        xmlDocument.appendChild(rootElement);
 
-            // The JSON data object should only have one key, "data".
-            if (rootJsonNode.getNodeType() != JsonNodeType.OBJECT || rootJsonNode.size() != 1) {
-                throw new InvalidXfaFormDataException();
-            }
-
-            // Hard-coding the data element because the element name that I give the JSON
-            // object is just "data". The XFA form expects the "xfa:data" element name.
-            final var dataElement = xmlDocument.createElement("xfa:data");
-            rootElement.appendChild(dataElement);
-
-            // The "data" key should always have a JSON object as its value.
-            final var dataNode = rootJsonNode.get("data");
-            if (dataNode.getNodeType() != JsonNodeType.OBJECT) {
-                throw new InvalidXfaFormDataException();
-            }
-
-            // Recurses through the data node and creates the XML elements.
-            // This call modifies dataElement, and by extension, xmlDocument.
-            convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
-
-            return xmlDocument;
-        } catch(JsonProcessingException ex) {
-            throw new InvalidXfaFormException();
+        // The JSON data object should only have one key, "data".
+        if (rootJsonNode.getNodeType() != JsonNodeType.OBJECT || rootJsonNode.size() != 1) {
+            throw new InvalidXfaFormDataException();
         }
+
+        // Hard-coding the data element because the element name that I give the JSON
+        // object is just "data". The XFA form expects the "xfa:data" element name.
+        final var dataElement = xmlDocument.createElement("xfa:data");
+        rootElement.appendChild(dataElement);
+
+        // The "data" key should always have a JSON object as its value.
+        final var dataNode = rootJsonNode.get("data");
+        if (dataNode.getNodeType() != JsonNodeType.OBJECT) {
+            throw new InvalidXfaFormDataException();
+        }
+
+        // Recurses through the data node and creates the XML elements.
+        // This call modifies dataElement, and by extension, xmlDocument.
+        convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
+
+        return xmlDocument;
     }
 
     /**
      * Recursively converts a <code>JsonNode</code> to XML elements.
      * This method modifies the <code>element</code> parameter by adding child elements to it.
+     *
      * @param xmlDocument The XML document to which the elements will be added.
-     * @param element The XML element to which the child elements will be added.
-     * @param jsonNode The JSON node to be converted. This should be the corresponding JSON value content
-     *                 for the <code>element</code> parameter.
+     * @param element     The XML element to which the child elements will be added.
+     * @param jsonNode    The JSON node to be converted. This should be the corresponding JSON value content
+     *                    for the <code>element</code> parameter.
      */
     private static void convertJsonNodeToXmlElement(
             final @NotNull Document xmlDocument,
@@ -115,14 +114,21 @@ public class DataFormatter {
             @NotNull JsonNode jsonNode) {
 
         switch (jsonNode.getNodeType()) {
-            case OBJECT -> jsonNode.fields().forEachRemaining(entry -> {
-                final var childElement = xmlDocument.createElement(entry.getKey());
-                element.appendChild(childElement);
-                convertJsonNodeToXmlElement(xmlDocument, childElement, entry.getValue());
-            });
+            case OBJECT -> {
+                for (final String fieldName : jsonNode.propertyNames()) {
+                    final var childElement = xmlDocument.createElement(fieldName);
+                    element.appendChild(childElement);
+                    convertJsonNodeToXmlElement(xmlDocument, childElement, jsonNode.path(fieldName));
+                }
+            }
             case STRING -> {
-                final var textNode = xmlDocument.createTextNode(jsonNode.asText());
+                // Jackson 3 deprecates textValue(); stringValue() is the non-deprecated string accessor.
+                final var textNode = xmlDocument.createTextNode(jsonNode.stringValue());
                 element.appendChild(textNode);
+            }
+            default -> {
+                // For now, ignore other node types (numbers, booleans, arrays, null).
+                // If you need them, add cases and/or schema support.
             }
         }
     }
@@ -139,7 +145,7 @@ public class DataFormatter {
      * @param xml The XML data from the form.
      * @return A pretty-printed String of a JSON schema object representing the JSON schema version of the form schema.
      */
-    public static String generateJsonSchema(final String xml) throws JsonProcessingException {
+    public static String generateJsonSchema(final String xml) {
         final var topNode = convertXmlToJsonNode(xml);
         return generateJsonSchema(topNode).toPrettyString();
     }
@@ -165,12 +171,10 @@ public class DataFormatter {
             final var schemaObjectProperties = objectMapper.createObjectNode();
             schemaNode.set("properties", schemaObjectProperties);
 
-            // recursing on the child nodes and feeding their schemas into the properties schema node
-            var sourceChildren = sourceNode.fields();
-            sourceChildren.forEachRemaining(entry -> {
-                var childSchema = generateJsonSchema(entry.getValue());
-                schemaObjectProperties.set(entry.getKey(), childSchema);
-            });
+            for (final String fieldName : sourceNode.propertyNames()) {
+                var childSchema = generateJsonSchema(sourceNode.path(fieldName));
+                schemaObjectProperties.set(fieldName, childSchema);
+            }
         } else {
             schemaNode.put("type", "string");
         }

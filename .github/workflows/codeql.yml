@@ -1,4 +1,3 @@
-
 name: "CodeQL"
 
 on:
@@ -11,7 +10,7 @@ on:
     - cron: '29 3 * * 2'
 
 env:
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '21'
   PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
@@ -42,7 +41,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      # AFAIk, this is unavaoidable, since the CodeQL actions
+      # AFAIk, this is unavoidable, since the CodeQL actions
       # must be run in the same job as build actions.
       - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
