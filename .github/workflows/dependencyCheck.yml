@@ -2,7 +2,7 @@ name: Weekly Dependency Check
 
 on:
   schedule:
-    - cron: '24 0 * * 4' # Runs at 00:24 on Thursday
+    - cron: '24 0 1 * *' # Runs at 00:24 on the first day of every month
   workflow_dispatch:
 
 env:
