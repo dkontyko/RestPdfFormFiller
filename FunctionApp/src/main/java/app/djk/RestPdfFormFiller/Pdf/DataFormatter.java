@@ -17,7 +17,9 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.StringWriter;
 
 public class DataFormatter {
-    private DataFormatter() { throw new IllegalStateException("Utility class"); }
+    private DataFormatter() {
+        throw new IllegalStateException("Utility class");
+    }
 
     public static String convertXmlToJsonString(String xml) {
         return convertXmlToJsonNode(xml).toPrettyString();
@@ -32,11 +34,12 @@ public class DataFormatter {
     /**
      * Converts a JSON representation of XFA form data to a String XML representation.
      * This method wraps the {@link #convertJsonToXml(String)} method.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws TransformerException If there's a problem with transforming the XML document into a string.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws TransformerException         If there's a problem with transforming the XML document into a string.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static String convertJsonToXmlString(String json) throws ParserConfigurationException, TransformerException {
         final var xmlDocument = convertJsonToXml(json);
@@ -55,53 +58,55 @@ public class DataFormatter {
      * Converts a JSON representation of XFA form data to its XML form.
      * The root XML and data elements are hard-coded because they are constant.
      * This method recurses through the remaining JSON elements and creates the XML elements.
+     *
      * @param json The JSON data object.
      * @return The XML Document representation of the data in <code>json</code>.
      * @throws ParserConfigurationException If there's a problem with creating the XML document.
-     * @throws InvalidXfaFormDataException If a JSON object is not in the correct format for an XFA form.
+     * @throws InvalidXfaFormDataException  If a JSON object is not in the correct format for an XFA form.
      */
     public static Document convertJsonToXml(String json) throws ParserConfigurationException {
         final var xmlDocument = (DocumentBuilderFactory.newInstance()).newDocumentBuilder().newDocument();
 
-            final var rootJsonNode = (new ObjectMapper()).readTree(json);
+        final var rootJsonNode = (new ObjectMapper()).readTree(json);
 
 
-            // Creating the root element that an XFA form expects.
-            // This element name is not expected to be in the JSON data object.
-            final var rootElement = xmlDocument.createElement("xfa:datasets");
-            rootElement.setAttribute("xmlns:xfa", "http://www.xfa.org/schema/xfa-data/1.0/");
-            xmlDocument.appendChild(rootElement);
+        // Creating the root element that an XFA form expects.
+        // This element name is not expected to be in the JSON data object.
+        final var rootElement = xmlDocument.createElement("xfa:datasets");
+        rootElement.setAttribute("xmlns:xfa", "http://www.xfa.org/schema/xfa-data/1.0/");
+        xmlDocument.appendChild(rootElement);
 
-            // The JSON data object should only have one key, "data".
-            if (rootJsonNode.getNodeType() != JsonNodeType.OBJECT || rootJsonNode.size() != 1) {
-                throw new InvalidXfaFormDataException();
-            }
+        // The JSON data object should only have one key, "data".
+        if (rootJsonNode.getNodeType() != JsonNodeType.OBJECT || rootJsonNode.size() != 1) {
+            throw new InvalidXfaFormDataException();
+        }
 
-            // Hard-coding the data element because the element name that I give the JSON
-            // object is just "data". The XFA form expects the "xfa:data" element name.
-            final var dataElement = xmlDocument.createElement("xfa:data");
-            rootElement.appendChild(dataElement);
+        // Hard-coding the data element because the element name that I give the JSON
+        // object is just "data". The XFA form expects the "xfa:data" element name.
+        final var dataElement = xmlDocument.createElement("xfa:data");
+        rootElement.appendChild(dataElement);
 
-            // The "data" key should always have a JSON object as its value.
-            final var dataNode = rootJsonNode.get("data");
-            if (dataNode.getNodeType() != JsonNodeType.OBJECT) {
-                throw new InvalidXfaFormDataException();
-            }
+        // The "data" key should always have a JSON object as its value.
+        final var dataNode = rootJsonNode.get("data");
+        if (dataNode.getNodeType() != JsonNodeType.OBJECT) {
+            throw new InvalidXfaFormDataException();
+        }
 
-            // Recurses through the data node and creates the XML elements.
-            // This call modifies dataElement, and by extension, xmlDocument.
-            convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
+        // Recurses through the data node and creates the XML elements.
+        // This call modifies dataElement, and by extension, xmlDocument.
+        convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
 
-            return xmlDocument;
+        return xmlDocument;
     }
 
     /**
      * Recursively converts a <code>JsonNode</code> to XML elements.
      * This method modifies the <code>element</code> parameter by adding child elements to it.
+     *
      * @param xmlDocument The XML document to which the elements will be added.
-     * @param element The XML element to which the child elements will be added.
-     * @param jsonNode The JSON node to be converted. This should be the corresponding JSON value content
-     *                 for the <code>element</code> parameter.
+     * @param element     The XML element to which the child elements will be added.
+     * @param jsonNode    The JSON node to be converted. This should be the corresponding JSON value content
+     *                    for the <code>element</code> parameter.
      */
     private static void convertJsonNodeToXmlElement(
             final @NotNull Document xmlDocument,
