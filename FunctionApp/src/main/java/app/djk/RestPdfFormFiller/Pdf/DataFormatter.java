@@ -1,12 +1,10 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormDataException;
-import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeType;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeType;
+import tools.jackson.dataformat.xml.XmlMapper;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.Document;
 
@@ -21,12 +19,12 @@ import java.io.StringWriter;
 public class DataFormatter {
     private DataFormatter() { throw new IllegalStateException("Utility class"); }
 
-    public static String convertXmlToJsonString(String xml) throws JsonProcessingException {
+    public static String convertXmlToJsonString(String xml) {
         return convertXmlToJsonNode(xml).toPrettyString();
 
     }
 
-    private static JsonNode convertXmlToJsonNode(String xml) throws JsonProcessingException {
+    private static JsonNode convertXmlToJsonNode(String xml) {
         final var xmlMapper = new XmlMapper();
         return xmlMapper.readTree(xml);
     }
@@ -65,7 +63,6 @@ public class DataFormatter {
     public static Document convertJsonToXml(String json) throws ParserConfigurationException {
         final var xmlDocument = (DocumentBuilderFactory.newInstance()).newDocumentBuilder().newDocument();
 
-        try {
             final var rootJsonNode = (new ObjectMapper()).readTree(json);
 
 
@@ -96,9 +93,6 @@ public class DataFormatter {
             convertJsonNodeToXmlElement(xmlDocument, dataElement, dataNode);
 
             return xmlDocument;
-        } catch(JsonProcessingException ex) {
-            throw new InvalidXfaFormException();
-        }
     }
 
     /**
@@ -115,14 +109,21 @@ public class DataFormatter {
             @NotNull JsonNode jsonNode) {
 
         switch (jsonNode.getNodeType()) {
-            case OBJECT -> jsonNode.fields().forEachRemaining(entry -> {
-                final var childElement = xmlDocument.createElement(entry.getKey());
-                element.appendChild(childElement);
-                convertJsonNodeToXmlElement(xmlDocument, childElement, entry.getValue());
-            });
+            case OBJECT -> {
+                for (final String fieldName : jsonNode.propertyNames()) {
+                    final var childElement = xmlDocument.createElement(fieldName);
+                    element.appendChild(childElement);
+                    convertJsonNodeToXmlElement(xmlDocument, childElement, jsonNode.path(fieldName));
+                }
+            }
             case STRING -> {
-                final var textNode = xmlDocument.createTextNode(jsonNode.asText());
+                // Jackson 3 deprecates textValue(); stringValue() is the non-deprecated string accessor.
+                final var textNode = xmlDocument.createTextNode(jsonNode.stringValue());
                 element.appendChild(textNode);
+            }
+            default -> {
+                // For now, ignore other node types (numbers, booleans, arrays, null).
+                // If you need them, add cases and/or schema support.
             }
         }
     }
@@ -139,7 +140,7 @@ public class DataFormatter {
      * @param xml The XML data from the form.
      * @return A pretty-printed String of a JSON schema object representing the JSON schema version of the form schema.
      */
-    public static String generateJsonSchema(final String xml) throws JsonProcessingException {
+    public static String generateJsonSchema(final String xml) {
         final var topNode = convertXmlToJsonNode(xml);
         return generateJsonSchema(topNode).toPrettyString();
     }
@@ -165,12 +166,10 @@ public class DataFormatter {
             final var schemaObjectProperties = objectMapper.createObjectNode();
             schemaNode.set("properties", schemaObjectProperties);
 
-            // recursing on the child nodes and feeding their schemas into the properties schema node
-            var sourceChildren = sourceNode.fields();
-            sourceChildren.forEachRemaining(entry -> {
-                var childSchema = generateJsonSchema(entry.getValue());
-                schemaObjectProperties.set(entry.getKey(), childSchema);
-            });
+            for (final String fieldName : sourceNode.propertyNames()) {
+                var childSchema = generateJsonSchema(sourceNode.path(fieldName));
+                schemaObjectProperties.set(fieldName, childSchema);
+            }
         } else {
             schemaNode.put("type", "string");
         }
