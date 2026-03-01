@@ -20,23 +20,23 @@
         <dependency>
             <groupId>com.microsoft.azure.functions</groupId>
             <artifactId>azure-functions-java-library</artifactId>
-            <version>3.2.2</version>
+            <version>3.2.3</version>
         </dependency>
         <dependency>
             <groupId>com.microsoft.graph</groupId>
             <artifactId>microsoft-graph</artifactId>
-            <version>6.59.0</version>
+            <version>6.62.0</version>
         </dependency>
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-identity</artifactId>
-            <version>1.18.1</version>
+            <version>1.18.2</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.librepdf</groupId>
             <artifactId>openpdf</artifactId>
-            <version>3.0.0</version>
+            <version>3.0.2</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -46,12 +46,12 @@
         <dependency>
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>3.0.3</version>
+            <version>3.1.0</version>
         </dependency>
         <dependency>
             <groupId>tools.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-xml</artifactId>
-            <version>3.0.3</version>
+            <version>3.1.0</version>
         </dependency>
 
 
@@ -59,20 +59,20 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>6.0.1</version>
+            <version>6.0.3</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>5.21.0</version>
+            <version>5.22.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
-            <version>26.0.2-1</version>
+            <version>26.1.0</version>
             <scope>compile</scope>
         </dependency>
     </dependencies>
