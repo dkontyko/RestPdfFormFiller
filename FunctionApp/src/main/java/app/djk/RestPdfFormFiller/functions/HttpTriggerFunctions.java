@@ -17,6 +17,7 @@ import com.microsoft.kiota.ApiException;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeType;
 
@@ -220,36 +221,54 @@ public class HttpTriggerFunctions {
         T get() throws Exception;
     }
 
+    /**
+     * Parses and validates request payload for <code>FillXfaData</code>.
+     *
+     * @param requestBody Raw HTTP request body content.
+     * @return Parsed fill request payload.
+     */
     private static FillRequest parseFillRequest(final String requestBody) {
+        final var rootNode = parseRequestBodyAsJson(requestBody);
+
+        final var templateNode = rootNode.path("templateBase64");
+        final var templateBase64 = templateNode.stringValue();
+        if (templateNode.getNodeType() != JsonNodeType.STRING || templateBase64 == null || templateBase64.isBlank()) {
+            throw new IllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
+        }
+
+        final var formDataNode = rootNode.path("formData");
+        if (!formDataNode.isObject()) {
+            throw new IllegalArgumentException("Request field 'formData' must be a JSON object.");
+        }
+
+        if (!formDataNode.has("data") || formDataNode.size() != 1 || !formDataNode.path("data").isObject()) {
+            throw new IllegalArgumentException("Request field 'formData' must contain only a 'data' object.");
+        }
+
+        return new FillRequest(templateBase64, formDataNode.toString());
+    }
+
+    /**
+     * Parses the request body into a JSON node and translates parsing failures into a caller-facing
+     * <code>IllegalArgumentException</code>.
+     *
+     * @param requestBody Raw HTTP request body content.
+     * @return Parsed JSON root node.
+     */
+    private static JsonNode parseRequestBodyAsJson(final String requestBody) {
         try {
-            final var rootNode = OBJECT_MAPPER.readTree(requestBody);
-
-            final var templateNode = rootNode.path("templateBase64");
-            final var templateBase64 = templateNode.stringValue();
-            if (templateNode.getNodeType() != JsonNodeType.STRING || templateBase64 == null || templateBase64.isBlank()) {
-                throw new IllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
-            }
-
-            final var formDataNode = rootNode.path("formData");
-            if (!formDataNode.isObject()) {
-                throw new IllegalArgumentException("Request field 'formData' must be a JSON object.");
-            }
-
-            final String formDataJson;
-            if (formDataNode.has("data") && formDataNode.size() == 1 && formDataNode.path("data").isObject()) {
-                formDataJson = formDataNode.toString();
-            } else {
-                final var normalizedRoot = OBJECT_MAPPER.createObjectNode();
-                normalizedRoot.set("data", formDataNode);
-                formDataJson = normalizedRoot.toString();
-            }
-
-            return new FillRequest(templateBase64, formDataJson);
+            return OBJECT_MAPPER.readTree(requestBody);
         } catch (RuntimeException e) {
             throw new IllegalArgumentException("Request body must be valid JSON.", e);
         }
     }
 
+    /**
+     * Request payload contract for <code>FillXfaData</code>.
+     *
+     * @param templateBase64 Base64-encoded source PDF content.
+     * @param formDataJson   JSON object string containing a single <code>data</code> object.
+     */
     private record FillRequest(String templateBase64, String formDataJson) {
     }
 
