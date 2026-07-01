@@ -17,7 +17,10 @@ import com.microsoft.kiota.ApiException;
 import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeType;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
@@ -27,6 +30,8 @@ import java.util.logging.Level;
  * Azure Functions with HTTP Trigger.
  */
 public class HttpTriggerFunctions {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
      * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
@@ -108,21 +113,17 @@ public class HttpTriggerFunctions {
             final ExecutionContext context) {
 
 
-        // get PDF from SPO
-        // get form content from request body
-        // fill form with content
-        // return PDF in response body (don't edit file)
-
         return errorHandler(request, context, () -> {
-
-            final var fileStream = getFileInputStreamFromSpo(request);
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+            final var fillRequest = parseFillRequest(requestBody);
 
-            final var filledFormStream = RestPdfApi.fillXfaForm(fileStream, requestBody);
-            final var base64EncodedForm = Base64.getEncoder().encode(filledFormStream.toString().getBytes());
+            final var templateBytes = Base64.getDecoder().decode(fillRequest.templateBase64());
+            final var templateStream = new ByteArrayInputStream(templateBytes);
+
+            final var filledPdfBytes = RestPdfApi.fillXfaForm(templateStream, fillRequest.formDataJson());
+            final var base64EncodedForm = Base64.getEncoder().encodeToString(filledPdfBytes);
 
             return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
-            //return request.createResponseBuilder(HttpStatus.NOT_IMPLEMENTED).build();
         });
     }
 
@@ -217,6 +218,39 @@ public class HttpTriggerFunctions {
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
         T get() throws Exception;
+    }
+
+    private static FillRequest parseFillRequest(final String requestBody) {
+        try {
+            final var rootNode = OBJECT_MAPPER.readTree(requestBody);
+
+            final var templateNode = rootNode.path("templateBase64");
+            final var templateBase64 = templateNode.stringValue();
+            if (templateNode.getNodeType() != JsonNodeType.STRING || templateBase64 == null || templateBase64.isBlank()) {
+                throw new IllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
+            }
+
+            final var formDataNode = rootNode.path("formData");
+            if (!formDataNode.isObject()) {
+                throw new IllegalArgumentException("Request field 'formData' must be a JSON object.");
+            }
+
+            final String formDataJson;
+            if (formDataNode.has("data") && formDataNode.size() == 1 && formDataNode.path("data").isObject()) {
+                formDataJson = formDataNode.toString();
+            } else {
+                final var normalizedRoot = OBJECT_MAPPER.createObjectNode();
+                normalizedRoot.set("data", formDataNode);
+                formDataJson = normalizedRoot.toString();
+            }
+
+            return new FillRequest(templateBase64, formDataJson);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Request body must be valid JSON.", e);
+        }
+    }
+
+    private record FillRequest(String templateBase64, String formDataJson) {
     }
 
     /**

@@ -11,7 +11,11 @@ import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
 import java.util.List;
 
 public class RestPdfApi {
@@ -81,10 +85,12 @@ public class RestPdfApi {
     }
 
     //TODO Given JSON content for specified form, get PDF with form fields filled with content
-    public static OutputStream fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
-        if (!isXfaForm(pdfStream)) throw new InvalidXfaFormException();
-        var outFile = new BufferedOutputStream(new ByteArrayOutputStream());
-        var pdfStamper = new PdfStamper(new PdfReader(pdfStream), outFile);
+    public static byte[] fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
+        final var pdfBytes = pdfStream.readAllBytes();
+        if (!isXfaForm(pdfBytes)) throw new InvalidXfaFormException();
+
+        final var outputStream = new ByteArrayOutputStream();
+        final var pdfStamper = new PdfStamper(new PdfReader(pdfBytes), outputStream);
 
         final var xmlData = DataFormatter.convertJsonToXml(jsonFormData);
 
@@ -93,7 +99,6 @@ public class RestPdfApi {
         xfaForm.setChanged(true);
 
         pdfStamper.close();
-        outFile.flush();
-        return outFile;
+        return outputStream.toByteArray();
     }
 }
