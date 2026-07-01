@@ -84,21 +84,23 @@ public class RestPdfApi {
         return isXfaForm(new ByteArrayInputStream(pdfBytes));
     }
 
-    //TODO Given JSON content for specified form, get PDF with form fields filled with content
+
     public static byte[] fillXfaForm(final InputStream pdfStream, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
-        final var pdfBytes = pdfStream.readAllBytes();
+        return fillXfaForm(pdfStream.readAllBytes(), jsonFormData);
+    }
+
+    public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
         if (!isXfaForm(pdfBytes)) throw new InvalidXfaFormException();
 
-        final var outputStream = new ByteArrayOutputStream();
-        final var pdfStamper = new PdfStamper(new PdfReader(pdfBytes), outputStream);
+        try (final var outputStream = new ByteArrayOutputStream();
+             final var pdfStamper = new PdfStamper(new PdfReader(pdfBytes), outputStream)) {
+            final var xmlData = DataFormatter.convertJsonToXml(jsonFormData);
 
-        final var xmlData = DataFormatter.convertJsonToXml(jsonFormData);
+            final var xfaForm = new XfaForm(pdfStamper.getReader());
+            xfaForm.fillXfaForm(xmlData);
+            xfaForm.setChanged(true);
 
-        final var xfaForm = new XfaForm(pdfStamper.getReader());
-        xfaForm.fillXfaForm(xmlData);
-        xfaForm.setChanged(true);
-
-        pdfStamper.close();
-        return outputStream.toByteArray();
+            return outputStream.toByteArray();
+        }
     }
 }
