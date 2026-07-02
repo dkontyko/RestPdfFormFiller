@@ -1,6 +1,6 @@
 name: Java Build
 
-description: Setup Java and run Maven build for the FunctionApp project.
+description: Setup Java and run a Maven build (optionally generating a JaCoCo report) for the project in package-directory.
 
 inputs:
   package-directory:
@@ -17,7 +17,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Java Sdk ${{ inputs.java-version }}
+    - name: Setup Java SDK ${{ inputs.java-version }}
       uses: actions/setup-java@v4
       with:
         distribution: microsoft
