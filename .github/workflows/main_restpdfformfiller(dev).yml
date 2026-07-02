@@ -20,20 +20,11 @@ jobs:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
-      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+      - name: Build with Maven (including tests)
+        uses: ./.github/actions/java-build
         with:
-          distribution: 'microsoft'
+          package-directory: ${{ env.PACKAGE_DIRECTORY }}
           java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-
-      - name: 'Restore Project Dependencies Using Mvn'
-        # `mvn clean package` runs unit tests as part of the Maven lifecycle.
-        shell: pwsh
-        run: |
-          pushd './${{ env.PACKAGE_DIRECTORY }}'
-          mvn clean package
-          popd
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
