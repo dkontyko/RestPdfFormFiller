@@ -28,6 +28,7 @@ jobs:
           cache: maven
 
       - name: 'Restore Project Dependencies Using Mvn'
+        # `mvn clean package` runs unit tests as part of the Maven lifecycle.
         shell: pwsh
         run: |
           pushd './${{ env.PACKAGE_DIRECTORY }}'
