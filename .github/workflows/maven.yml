@@ -9,6 +9,10 @@ on:
   workflow_dispatch:
   workflow_call:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
   JAVA_VERSION: '21' # set this to the java version to use
@@ -28,10 +32,92 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      - name: Build with Maven
-        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+      - name: Run Unit Tests
+        run: mvn -B test jacoco:report --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Summarize JaCoCo Coverage
+        id: coverage
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: pwsh
+        run: |
+          $reportPath = "${{ env.PACKAGE_DIRECTORY }}/target/site/jacoco/jacoco.xml"
+          if (-not (Test-Path $reportPath)) {
+            throw "JaCoCo report not found at $reportPath"
+          }
+
+          [xml]$jacoco = Get-Content $reportPath
+          $counters = $jacoco.report.counter
+
+          $line = $counters | Where-Object { $_.type -eq 'LINE' } | Select-Object -First 1
+          $branch = $counters | Where-Object { $_.type -eq 'BRANCH' } | Select-Object -First 1
+          $instruction = $counters | Where-Object { $_.type -eq 'INSTRUCTION' } | Select-Object -First 1
+
+          $lineCovered = [double]$line.covered
+          $lineMissed = [double]$line.missed
+          $lineTotal = $lineCovered + $lineMissed
+          $linePct = if ($lineTotal -eq 0) { 0 } else { [math]::Round(($lineCovered / $lineTotal) * 100, 2) }
+
+          $branchCovered = [double]$branch.covered
+          $branchMissed = [double]$branch.missed
+          $branchTotal = $branchCovered + $branchMissed
+          $branchPct = if ($branchTotal -eq 0) { 0 } else { [math]::Round(($branchCovered / $branchTotal) * 100, 2) }
+
+          $instructionCovered = [double]$instruction.covered
+          $instructionMissed = [double]$instruction.missed
+          $instructionTotal = $instructionCovered + $instructionMissed
+          $instructionPct = if ($instructionTotal -eq 0) { 0 } else { [math]::Round(($instructionCovered / $instructionTotal) * 100, 2) }
+
+          "line_pct=$linePct" >> $env:GITHUB_OUTPUT
+          "branch_pct=$branchPct" >> $env:GITHUB_OUTPUT
+          "instruction_pct=$instructionPct" >> $env:GITHUB_OUTPUT
+
+      - name: Comment Coverage on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- jacoco-coverage-summary -->';
+            const body = `${marker}
+            ## JaCoCo Coverage Summary
+            - Line coverage: **${{ steps.coverage.outputs.line_pct }}%**
+            - Branch coverage: **${{ steps.coverage.outputs.branch_pct }}%**
+            - Instruction coverage: **${{ steps.coverage.outputs.instruction_pct }}%**`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number
+            });
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
+
+      - name: Upload JaCoCo Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: ${{ env.PACKAGE_DIRECTORY }}/target/site/jacoco
+          if-no-files-found: error
+
+      - name: Build with Maven
+        run: mvn -B -DskipTests package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
