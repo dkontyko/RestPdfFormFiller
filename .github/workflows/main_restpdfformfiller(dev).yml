@@ -27,14 +27,8 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      - name: Run Unit Tests
-        shell: pwsh
-        run: |
-          pushd './${{ env.PACKAGE_DIRECTORY }}'
-          mvn test
-          popd
-
       - name: 'Restore Project Dependencies Using Mvn'
+        # `mvn clean package` runs unit tests as part of the Maven lifecycle.
         shell: pwsh
         run: |
           pushd './${{ env.PACKAGE_DIRECTORY }}'

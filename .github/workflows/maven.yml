@@ -32,8 +32,9 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      - name: Run Unit Tests
-        run: mvn -B test jacoco:report --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+      - name: Build, Test, and Generate JaCoCo Report
+        # `mvn clean package` runs unit tests as part of the Maven lifecycle.
+        run: mvn -B clean package jacoco:report --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
 
       - name: Summarize JaCoCo Coverage
         id: coverage
@@ -118,6 +119,3 @@ jobs:
           name: jacoco-report
           path: ${{ env.PACKAGE_DIRECTORY }}/target/site/jacoco
           if-no-files-found: error
-
-      - name: Build with Maven
-        run: mvn -B -DskipTests package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
