@@ -26,3 +26,7 @@ jobs:
           filters: |
             functionApp:
               - 'FunctionApp/**'
+              - '.github/actions/java-build/action.yml'
+              - '.github/workflows/codeql.yml'
+              - '.github/workflows/filter-changes.yml'
+              - '.github/workflows/maven.yml'

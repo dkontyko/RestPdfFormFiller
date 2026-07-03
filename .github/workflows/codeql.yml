@@ -19,7 +19,6 @@ jobs:
 
   analyze:
     needs: checkChanges
-    if: ${{ needs.checkChanges.outputs.functionApp == 'true' }}
     name: Analyze
     runs-on: windows-latest
     timeout-minutes: 30
@@ -37,23 +36,27 @@ jobs:
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
+        if: ${{ github.event_name == 'schedule' || needs.checkChanges.outputs.functionApp == 'true' }}
         uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         with:
           languages: ${{ matrix.language }}
 
-      # AFAIk, this is unavoidable, since the CodeQL actions
-      # must be run in the same job as build actions.
-      - name: Setup Java Sdk ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
-        with:
-          distribution: 'microsoft'
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: maven
-
+      # CodeQL init, build, and analyze must stay in this same job.
       - name: Build with Maven
-        run: mvn -B package --file ${{ env.PACKAGE_DIRECTORY }}/pom.xml
+        if: ${{ github.event_name == 'schedule' || needs.checkChanges.outputs.functionApp == 'true' }}
+        uses: ./.github/actions/java-build
+        with:
+          package-directory: ${{ env.PACKAGE_DIRECTORY }}
+          java-version: ${{ env.JAVA_VERSION }}
+          include-jacoco-report: 'false'
 
       - name: Perform CodeQL Analysis
+        if: ${{ github.event_name == 'schedule' || needs.checkChanges.outputs.functionApp == 'true' }}
         uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
         with:
           category: "/language:${{matrix.language}}"
+
+      - name: CodeQL Not Applicable
+        if: ${{ github.event_name != 'schedule' && needs.checkChanges.outputs.functionApp != 'true' }}
+        shell: pwsh
+        run: Write-Host 'Skipping CodeQL analysis because this change does not touch FunctionApp.'
