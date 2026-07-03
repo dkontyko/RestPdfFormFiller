@@ -45,6 +45,18 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
+    void getXfaSchemaReturnsBadRequestWhenBodyMissing() {
+        final var function = new HttpTriggerFunctions();
+        final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of());
+
+        final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("No content supplied in body.");
+    }
+
+    @Test
     void fillXfaDataReturnsBadRequestWhenRequestBodyIsNotJson() {
         final var function = new HttpTriggerFunctions();
         final var responseMocks = setupResponseMocks(Optional.of("this is not json"), Map.of());
@@ -63,18 +75,6 @@ class HttpTriggerFunctionsTest {
         final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
         final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
-
-        assertSame(responseMocks.response(), actualResponse);
-        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
-    }
-
-    @Test
-    void authNTestReturnsBadRequestWhenAuthorizationHeaderMissing() {
-        final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.of("ignored"), Map.of());
-
-        final var actualResponse = function.authNTest(responseMocks.request(), responseMocks.context());
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
