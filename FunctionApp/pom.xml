@@ -140,7 +140,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
                 <configuration>
-                    <release>25</release>
+                    <release>${java.version}</release>
                     <encoding>${project.build.sourceEncoding}</encoding>
                     <showWarnings>true</showWarnings>
                     <showDeprecation>true</showDeprecation>
@@ -174,7 +174,7 @@
                     <runtime>
                         <!-- runtime os, could be windows, linux or docker-->
                         <os>windows</os>
-                        <javaVersion>25</javaVersion>
+                        <javaVersion>${java.version}</javaVersion>
                         <!-- for docker function, please set the following parameters -->
                         <!-- <image>[hub-user/]repo-name[:tag]</image> -->
                         <!-- <serverId></serverId> -->
