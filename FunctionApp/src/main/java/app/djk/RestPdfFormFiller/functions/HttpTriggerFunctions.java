@@ -52,7 +52,7 @@ public class HttpTriggerFunctions {
             // Return format supplied as URL query parameter. See RestPdfApi for valid formats.
             final var returnDataFormat = request.getQueryParameters().get("format");
 
-            if (!RestPdfApi.FORM_DATA_FORMATS.contains(returnDataFormat)) {
+            if (returnDataFormat == null || !RestPdfApi.FORM_DATA_FORMATS.contains(returnDataFormat)) {
                 throw new InvalidReturnDataFormatException();
             }
 

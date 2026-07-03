@@ -88,7 +88,7 @@ public class DataFormatter {
 
         // The "data" key should always have a JSON object as its value.
         final var dataNode = rootJsonNode.get("data");
-        if (dataNode.getNodeType() != JsonNodeType.OBJECT) {
+        if (dataNode == null || dataNode.getNodeType() != JsonNodeType.OBJECT) {
             throw new InvalidXfaFormDataException();
         }
 
