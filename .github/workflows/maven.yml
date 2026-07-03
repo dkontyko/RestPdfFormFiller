@@ -14,7 +14,7 @@ permissions:
 
 env:
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
-  JAVA_VERSION: '21' # set this to the java version to use
+  JAVA_VERSION: '25' # set this to the java version to use
 
 jobs:
   
