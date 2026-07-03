@@ -17,6 +17,7 @@ import tools.jackson.databind.node.JsonNodeType;
 
 import java.io.ByteArrayInputStream;
 import java.util.*;
+import java.util.logging.Level;
 
 /**
  * Azure Functions with HTTP Trigger.
@@ -124,48 +125,45 @@ public class HttpTriggerFunctions {
                                              final ExecutionContext context,
                                              final ThrowingSupplier<HttpResponseMessage> function) {
         try {
-            /*
-             EDIT: This was a bad idea. (Thank you, GitHub Copilot, for autocompleting that sentence.)
-             I am devolving these exceptions to their respective methods as soon as I have the code working.
-             ------------------
-             ORIGINAL:
-             AFAIK, lambdas cannot inherently throw checked exceptions.
-             So I wrote a custom functional interface that can throw an exception. But
-             in order to do so, you have to declare every possible exception that may be
-             thrown in the method signature. So instead, I'm just declaring the base Exception
-             class. But then I can't handle specific exceptions without downcasting the exception
-             to its original type. So that's what the inner try-catch block does, until I find a
-             better way.
-            */
-            try { //NOSONAR
-                return function.get();
-            } catch (Exception e) { //NOSONAR
-                context.getLogger().warning("Caught exception: " + e);
-                context.getLogger().warning(Arrays.toString(e.getStackTrace()));
-                var eClass = e.getClass();
-                throw eClass.cast(e);
-            }
+            return function.get();
         } // Local project exceptions
         catch (EmptyRequestBodyException e) {
-            context.getLogger().warning("Empty request body.");
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("No content supplied in body.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "No content supplied in body.", e);
         } catch (InvalidXfaFormException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid XFA form.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid XFA form.", e);
         } catch (InvalidReturnDataFormatException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid format parameter: Must be 'json' or 'xml'.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid format parameter: Must be 'json' or 'xml'.", e);
         } catch (InvalidSessionIdException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid session ID.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid session ID.", e);
         }
         // Dependency and built-in exceptions
         catch (ApiException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Could not retrieve file.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Could not retrieve file.", e);
         } catch (NumberFormatException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid integer argument in request.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid integer argument in request.", e);
         } catch (IllegalArgumentException e) {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).body("Invalid argument in request.").build();
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid argument in request.", e);
         } catch (Exception e) {
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).body("Request failed.").build();
+            return logAndRespond(request, context, Level.SEVERE, HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Request failed.", e);
         }
+    }
+
+    private static HttpResponseMessage logAndRespond(final HttpRequestMessage<?> request,
+                                                     final ExecutionContext context,
+                                                     final Level level,
+                                                     final HttpStatus status,
+                                                     final String responseBody,
+                                                     final Throwable throwable) {
+        context.getLogger().log(level, responseBody, throwable);
+        return request.createResponseBuilder(status).body(responseBody).build();
     }
 
     /**
