@@ -10,7 +10,7 @@ on:
     - cron: '29 3 * * 2'
 
 env:
-  JAVA_VERSION: '21'
+  JAVA_VERSION: '25'
   PACKAGE_DIRECTORY: 'FunctionApp'
 
 jobs:
