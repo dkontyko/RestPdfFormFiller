@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_NAME: restpdfformfiller # set this to your function app name on Azure
+  AZURE_FUNCTIONAPP_NAME: RestPdfFormFiller # set this to your function app name on Azure
+  AZURE_FUNCTIONAPP_SLOT_NAME: dev # set this to your deployment slot name on Azure
   PACKAGE_DIRECTORY: 'FunctionApp' # set this to the directory which contains pom.xml file
   JAVA_VERSION: '25' # set this to the java version to use
 
@@ -18,7 +19,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       id-token: write
-      contents: read
+      contents: write
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -41,7 +42,7 @@ jobs:
         id: fa
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          slot-name: 'dev'
+          slot-name: ${{ env.AZURE_FUNCTIONAPP_SLOT_NAME }}
           package: ${{ env.PACKAGE_DIRECTORY }}
           respect-pom-xml: true
 
