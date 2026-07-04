@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "apiProperties.json schema for CI validation. A subset of the official paconn-apiProperties schema (https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/schemas/paconn-apiProperties.schema.json), which cannot be consumed directly because it is JSONC (contains comments). Like the official schema, this uses additionalProperties:false as an allowlist to catch typos and unknown fields (which Power Platform also rejects), so the property list must be kept in sync with the official field set.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "properties"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "properties": {
+      "type": "object",
+      "required": [
+        "iconBrandColor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "iconBrandColor": {
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "stackOwner": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policyTemplateInstances": {
+          "type": "array"
+        },
+        "scriptOperations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "connectionParameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "securestring",
+                  "int",
+                  "bool",
+                  "oauthSetting",
+                  "gatewaySetting"
+                ]
+              },
+              "uiDefinition": {
+                "$ref": "#/definitions/ConnectionParameter-uiDefinition"
+              },
+              "oAuthSettings": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ConnectionParameter-uiDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tooltip": {
+          "type": "string"
+        },
+        "tabIndex": {
+          "type": "integer"
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clearText": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "string"
+            },
+            "tabIndex": {
+              "type": "integer"
+            },
+            "capability": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hidden": {
+              "type": "string"
+            },
+            "allowedValues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "dependencies": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "values"
+                ],
+                "properties": {
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

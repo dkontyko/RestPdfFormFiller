@@ -1,0 +1,71 @@
+name: Deploy Custom Connector
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CustomConnector/**'
+      - '.github/workflows/deploy-connector.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for the GitHub OIDC token that pac exchanges (WIF)
+  contents: read
+
+jobs:
+  deploy-connector:
+    runs-on: windows-latest
+    # Gates on the power-platform-dev environment (main-branch-only policy +
+    # env-scoped AZURE_CLIENT_ID / AZURE_TENANT_ID / PP_ENVIRONMENT_URL). The FIC
+    # on the UAMI is bound to this environment's OIDC subject.
+    environment: power-platform-dev
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Power Platform CLI
+        uses: microsoft/powerplatform-actions/actions-install@0e44beb5424af932af47250a2568eba4c259e3d8 # v1.10.0
+        with:
+          add-tools-to-path: true
+
+      - name: Authenticate pac (GitHub OIDC / Workload Identity Federation)
+        run: |
+          pac auth create `
+            --githubFederated `
+            --applicationId "${{ secrets.AZURE_CLIENT_ID }}" `
+            --tenant "${{ secrets.AZURE_TENANT_ID }}" `
+            --environment "${{ vars.PP_ENVIRONMENT_URL }}"
+          # pac is a native command: PowerShell does not fail the step on a
+          # non-zero exit code, and $ErrorActionPreference does not apply. Guard
+          # explicitly so an auth failure stops here instead of surfacing later.
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Deploy connector (create on first run, update thereafter)
+        env:
+          CONNECTOR_ID: ${{ vars.PP_CONNECTOR_ID }}
+          ENV_URL: ${{ vars.PP_ENVIRONMENT_URL }}
+          DEF_FILE: CustomConnector/PdfFormFiller.swagger.json
+          PROP_FILE: CustomConnector/apiProperties.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:CONNECTOR_ID) {
+            Write-Host "Updating existing connector $($env:CONNECTOR_ID)..."
+            pac connector update `
+              --connector-id $env:CONNECTOR_ID `
+              --api-definition-file $env:DEF_FILE `
+              --api-properties-file $env:PROP_FILE `
+              --environment $env:ENV_URL
+          } else {
+            Write-Host "No PP_CONNECTOR_ID set - creating a new connector..."
+            pac connector create `
+              --api-definition-file $env:DEF_FILE `
+              --api-properties-file $env:PROP_FILE `
+              --environment $env:ENV_URL
+            Write-Host "::notice::Connector created. Copy the new Connector ID from the log above and set it as the"
+            Write-Host "::notice::repo/environment variable PP_CONNECTOR_ID so future runs update in place instead of creating duplicates."
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

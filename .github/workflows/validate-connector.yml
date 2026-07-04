@@ -1,0 +1,44 @@
+name: Validate Custom Connector
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'CustomConnector/**'
+      - '.github/workflows/validate-connector.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Validate JSON is well-formed
+        # windows-latest ships Python 3.12 + pip on PATH, so no setup-python step.
+        run: |
+          python -c "import json; [json.load(open(f)) for f in ('CustomConnector/PdfFormFiller.swagger.json','CustomConnector/apiProperties.json','CustomConnector/apiProperties.schema.json')]; print('JSON OK')"
+
+      - name: Install validators (openapi-spec-validator + check-jsonschema)
+        # Use `python -m pip` so packages install into the same interpreter used
+        # above (bare `pip` may resolve to a different Python on Windows images).
+        run: python -m pip install openapi-spec-validator check-jsonschema
+
+      - name: Validate the OpenAPI (Swagger 2.0) definition
+        # openapi-spec-validator checks the swagger against the OpenAPI 2.0 spec
+        # (structure + resolvable $refs) fully offline. NOTE: paconn validate was
+        # removed because it calls a Power Platform service that requires an
+        # interactive login (no service-principal support), so it cannot run in
+        # CI. Connector-specific rule violations surface at deploy time via pac.
+        run: openapi-spec-validator CustomConnector/PdfFormFiller.swagger.json
+
+      - name: Validate apiProperties against schema
+        run: check-jsonschema --schemafile CustomConnector/apiProperties.schema.json CustomConnector/apiProperties.json
