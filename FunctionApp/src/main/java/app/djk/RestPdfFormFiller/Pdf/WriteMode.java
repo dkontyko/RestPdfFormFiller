@@ -1,21 +1,24 @@
 package app.djk.RestPdfFormFiller.Pdf;
 
 /**
- * Describes how provided values interact with existing target values when filling an XFA form.
+ * Describes the overall fill strategy: whether the request is a partial update or a full replacement.
+ * <p>
+ * This is the "PATCH vs PUT" distinction for form data. {@link #PATCH} merges the request into the existing form,
+ * keeping any field the caller did not mention and applying the optional {@link PatchMode} collision policy to the
+ * fields that are provided. {@link #PUT} ignores the existing data entirely and replaces the whole form with the
+ * request, so any field the caller omits ends up blank.
  */
 public enum WriteMode {
     /**
-     * Provided values replace existing target values.
+     * Merge the request into the existing form: omitted fields are preserved and provided fields are governed by the
+     * accompanying {@link PatchMode}.
      */
-    OVERWRITE("overwrite"),
+    PATCH("patch"),
     /**
-     * Provided values are applied only when the existing target value is empty.
+     * Replace the entire form with the request: provided fields are written and omitted fields are cleared. Any
+     * {@link PatchMode} is irrelevant because there is nothing to merge against.
      */
-    IF_EMPTY("ifEmpty"),
-    /**
-     * Provided values that conflict with a different, non-empty existing target value are rejected.
-     */
-    FAIL_ON_CONFLICT("failOnConflict");
+    PUT("put");
 
     private final String value;
 

@@ -226,32 +226,13 @@ class HttpTriggerFunctionsTest {
     }
 
         @Test
-        void fillXfaDataReturnsBadRequestWhenPayloadModeIsInvalid() {
-                final var function = new HttpTriggerFunctions();
-                final var invalidPayload = """
-                                {
-                                    "templateBase64": "dGVzdA==",
-                                    "formData": {"data": {}},
-                                    "payloadMode": "unknown"
-                                }
-                                """;
-                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
-
-                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
-
-                assertSame(responseMocks.response(), actualResponse);
-                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'payloadMode' must be one of the following strings: partial, complete.");
-        }
-
-        @Test
         void fillXfaDataReturnsBadRequestWhenWriteModeIsInvalid() {
                 final var function = new HttpTriggerFunctions();
                 final var invalidPayload = """
                                 {
                                     "templateBase64": "dGVzdA==",
                                     "formData": {"data": {}},
-                                    "writeMode": "mergeMaybe"
+                                    "writeMode": "sideways"
                                 }
                                 """;
                 final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
@@ -260,7 +241,46 @@ class HttpTriggerFunctionsTest {
 
                 assertSame(responseMocks.response(), actualResponse);
                 verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
+                verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: patch, put.");
+        }
+
+        @Test
+        void fillXfaDataReturnsBadRequestWhenPatchModeIsInvalid() {
+                final var function = new HttpTriggerFunctions();
+                final var invalidPayload = """
+                                {
+                                    "templateBase64": "dGVzdA==",
+                                    "formData": {"data": {}},
+                                    "patchMode": "mergeMaybe"
+                                }
+                                """;
+                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+                assertSame(responseMocks.response(), actualResponse);
+                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+                verify(responseMocks.builder()).body("Request field 'patchMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
+        }
+
+        @Test
+        void fillXfaDataReturnsBadRequestWhenPatchModeSuppliedWithPut() {
+                final var function = new HttpTriggerFunctions();
+                final var invalidPayload = """
+                                {
+                                    "templateBase64": "dGVzdA==",
+                                    "formData": {"data": {}},
+                                    "writeMode": "put",
+                                    "patchMode": "ifEmpty"
+                                }
+                                """;
+                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+                assertSame(responseMocks.response(), actualResponse);
+                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+                verify(responseMocks.builder()).body("Request field 'patchMode' is only valid when 'writeMode' is 'patch'.");
         }
 
         @Test
@@ -283,12 +303,12 @@ class HttpTriggerFunctionsTest {
         }
 
     @Test
-    void fillXfaDataReturnsConflictWhenWriteModeFailOnConflictAndValueDiffers() throws Exception {
+    void fillXfaDataReturnsConflictWhenPatchModeFailOnConflictAndValueDiffers() throws Exception {
         final var function = new HttpTriggerFunctions();
         final var templateBase64 = Base64.getEncoder().encodeToString(readSampleDa4187Pdf());
         final var requestBody = "{\"templateBase64\":\"" + templateBase64 + "\","
                 + "\"formData\":{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}},"
-                + "\"writeMode\":\"failOnConflict\"}";
+                + "\"patchMode\":\"failOnConflict\"}";
         final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
 
         final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
@@ -300,12 +320,12 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
-    void fillXfaDataReturnsOkWhenWriteModeOverwriteSucceeds() throws Exception {
+    void fillXfaDataReturnsOkForPutReplace() throws Exception {
         final var function = new HttpTriggerFunctions();
         final var templateBase64 = Base64.getEncoder().encodeToString(readSampleDa4187Pdf());
         final var requestBody = "{\"templateBase64\":\"" + templateBase64 + "\","
                 + "\"formData\":{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}},"
-                + "\"writeMode\":\"overwrite\"}";
+                + "\"writeMode\":\"put\"}";
         final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
 
         final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());

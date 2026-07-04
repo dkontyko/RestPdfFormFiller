@@ -90,7 +90,7 @@ public class RestPdfApi {
     /**
      * Convenience overload that reads the entire stream into memory before filling.
      * <p>
-     * The underlying openpdf APIs (<code>PdfReader</code>/<code>PdfStamper</code>) and the write-mode merge both
+     * The underlying openpdf APIs (<code>PdfReader</code>/<code>PdfStamper</code>) and the PATCH merge both
      * need to traverse and, in the conflict case, re-read the document, so the bytes are fully buffered here
      * rather than streamed. Callers that already hold a stream (rather than a byte array) can use this without
      * having to buffer the content themselves.
@@ -107,12 +107,14 @@ public class RestPdfApi {
     }
 
     /**
-     * Convenience overload that fills using the default {@link WriteMode#OVERWRITE} behavior.
+     * Convenience overload that fills using the default strategy: {@link WriteMode#PATCH} with
+     * {@link PatchMode#OVERWRITE}.
      * <p>
-     * Overwrite is the default because it matches the historical, least-surprising contract: whatever the caller
-     * supplies wins. This overload exists so that existing callers (and tests) that do not care about conflict
-     * semantics are not forced to pass a {@link WriteMode}, keeping the common case terse while still routing
-     * through the single, authoritative fill implementation.
+     * These defaults match the historical, least-surprising contract: the request is merged into the existing form
+     * (nothing the caller omits is touched) and, for the fields the caller does provide, whatever it supplies wins.
+     * This overload exists so that callers (and tests) that do not need to choose a strategy are not forced to pass
+     * the mode arguments, keeping the common case terse while still routing through the single, authoritative fill
+     * implementation.
      *
      * @param pdfBytes     Source XFA PDF content.
      * @param jsonFormData JSON object string of the form <code>{"data": { ... }}</code>.
@@ -123,37 +125,21 @@ public class RestPdfApi {
      * @throws SAXException                 If the converted form data cannot be parsed as XML.
      */
     public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData) throws IOException, ParserConfigurationException, SAXException {
-        return fillXfaForm(pdfBytes, jsonFormData, WriteMode.OVERWRITE);
+        return fillXfaForm(pdfBytes, jsonFormData, WriteMode.PATCH, PatchMode.OVERWRITE);
     }
 
     /**
-     * Convenience overload that fills using {@link PayloadMode#PARTIAL} (fields absent from the request keep their
-     * existing values).
+     * Fills an XFA form with the provided data.
      * <p>
-     * Partial is the default so that callers who send a patch are not required to reason about the payload-mode
-     * distinction, and because it is the non-destructive choice: nothing the caller omits is touched. Callers that
-     * intend a full replacement opt in explicitly via
-     * {@link #fillXfaForm(byte[], String, WriteMode, PayloadMode)}.
-     *
-     * @param pdfBytes     Source XFA PDF content.
-     * @param jsonFormData JSON object string of the form <code>{"data": { ... }}</code>.
-     * @param writeMode    Controls how provided values interact with existing target values.
-     * @return The filled PDF as a byte array.
-     * @throws InvalidXfaFormException      If the PDF is not an XFA form.
-     * @throws WriteConflictException       If <code>writeMode</code> is {@link WriteMode#FAIL_ON_CONFLICT} and a
-     *                                      provided value would overwrite a different, non-empty existing value.
-     * @throws IOException                  If the PDF cannot be parsed or stamped.
-     * @throws ParserConfigurationException If the JSON-to-XML conversion cannot create an XML document.
-     * @throws SAXException                 If the converted form data cannot be parsed as XML.
-     */
-    public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData, final WriteMode writeMode)
-            throws IOException, ParserConfigurationException, SAXException {
-        return fillXfaForm(pdfBytes, jsonFormData, writeMode, PayloadMode.PARTIAL);
-    }
-
-    /**
-     * Fills an XFA form with the provided data, honoring both the {@link WriteMode} (how provided values interact
-     * with existing ones) and the {@link PayloadMode} (what happens to fields absent from the request).
+     * The two selectors are orthogonal:
+     * <ul>
+     *   <li>{@link WriteMode} chooses the overall strategy. {@link WriteMode#PATCH} merges the request into the
+     *       existing form (omitted fields are preserved); {@link WriteMode#PUT} replaces the whole form with the
+     *       request (omitted fields end up blank).</li>
+     *   <li>{@link PatchMode} is the collision policy for the fields that <em>are</em> provided, and applies only
+     *       under {@link WriteMode#PATCH}. Under {@link WriteMode#PUT} it is irrelevant because a full replacement
+     *       never merges against an existing value.</li>
+     * </ul>
      * <p>
      * <strong>Why the implementation looks the way it does.</strong> Two openpdf behaviors drive the design:
      * <ul>
@@ -162,32 +148,30 @@ public class RestPdfApi {
      *       detached <code>new XfaForm(reader)</code> can be modified but its changes are silently dropped, so we
      *       deliberately fetch the form via the stamper.</li>
      *   <li><em>{@code fillXfaForm} replaces the whole data subtree.</em> openpdf swaps out the entire
-     *       <code>&lt;xfa:data&gt;</code> form-root rather than merging field by field. Any field missing from the
-     *       node we hand it would therefore be <em>erased</em>, not left alone. To preserve untouched fields and to
-     *       implement the per-field write modes, we merge the incoming values onto a copy of the template's existing
-     *       data ourselves (see {@link #mergeFormData}) and pass that complete subtree.</li>
+     *       <code>&lt;xfa:data&gt;</code> form-root rather than merging field by field. That makes {@code PUT} a
+     *       direct hand-off of the incoming data. For {@code PATCH}, however, any field missing from the node we
+     *       hand it would be <em>erased</em> rather than left alone, so we first merge the incoming values onto a
+     *       copy of the template's existing data (see {@link #mergeFormData}) and pass that complete subtree.</li>
      * </ul>
-     * The two selectors are applied in sequence: {@link #mergeFormData} overlays provided values per
-     * <code>writeMode</code>, and then &mdash; only for {@link PayloadMode#COMPLETE} &mdash;
-     * {@link #clearUnprovidedLeaves} blanks any remaining field the caller did not mention, so the result reflects
-     * the "complete dataset" the caller declared. The XFA presence check happens up front so that a non-XFA PDF
-     * fails fast with a caller-safe error before we open a stamper.
+     * The XFA presence check happens up front so that a non-XFA PDF fails fast with a caller-safe error before we
+     * open a stamper.
      *
      * @param pdfBytes     Source XFA PDF content.
      * @param jsonFormData JSON object string of the form <code>{"data": { ... }}</code>.
-     * @param writeMode    Controls how provided values interact with existing target values.
-     * @param payloadMode  Controls whether fields absent from the request are preserved
-     *                     ({@link PayloadMode#PARTIAL}) or cleared ({@link PayloadMode#COMPLETE}).
+     * @param writeMode    Whether to merge ({@link WriteMode#PATCH}) or fully replace ({@link WriteMode#PUT}).
+     * @param patchMode    Collision policy for provided fields under {@link WriteMode#PATCH}; ignored for
+     *                     {@link WriteMode#PUT}.
      * @return The filled PDF as a byte array.
      * @throws InvalidXfaFormException      If the PDF is not an XFA form.
-     * @throws WriteConflictException       If <code>writeMode</code> is {@link WriteMode#FAIL_ON_CONFLICT} and a
-     *                                      provided value would overwrite a different, non-empty existing value.
+     * @throws WriteConflictException       If <code>writeMode</code> is {@link WriteMode#PATCH}, <code>patchMode</code>
+     *                                      is {@link PatchMode#FAIL_ON_CONFLICT}, and a provided value would overwrite
+     *                                      a different, non-empty existing value.
      * @throws IOException                  If the PDF cannot be parsed or stamped.
      * @throws ParserConfigurationException If the JSON-to-XML conversion cannot create an XML document.
      * @throws SAXException                 If the converted form data cannot be parsed as XML.
      */
     public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData, final WriteMode writeMode,
-                                     final PayloadMode payloadMode)
+                                     final PatchMode patchMode)
             throws IOException, ParserConfigurationException, SAXException {
         if (!isXfaForm(pdfBytes)) throw new InvalidXfaFormException();
 
@@ -204,28 +188,30 @@ public class RestPdfApi {
             final var incomingFormRoot = firstElementChild(firstElementChild(incomingDoc.getDocumentElement()));
 
             if (incomingFormRoot != null) {
-                final var existingFormRoot = firstElementChild(xfaForm.getDatasetsNode().getFirstChild());
-                final var mergedFormRoot = mergeFormData(existingFormRoot, incomingFormRoot, writeMode);
-                if (payloadMode == PayloadMode.COMPLETE) {
-                    // The caller declared a complete dataset, so any field it did not mention must be blanked.
-                    clearUnprovidedLeaves(mergedFormRoot, incomingFormRoot);
+                // PUT replaces the entire form, which is exactly what openpdf's fillXfaForm does with the incoming
+                // data, so PATCH is the only mode that needs to merge against (and thus preserve) existing values.
+                final Node dataToWrite;
+                if (writeMode == WriteMode.PUT) {
+                    dataToWrite = incomingFormRoot;
+                } else {
+                    final var existingFormRoot = firstElementChild(xfaForm.getDatasetsNode().getFirstChild());
+                    dataToWrite = mergeFormData(existingFormRoot, incomingFormRoot, patchMode);
                 }
-                // fillXfaForm replaces the entire data subtree, so mergedFormRoot must contain every field
-                // that should remain in the document (existing values plus the applied incoming values).
-                xfaForm.fillXfaForm(mergedFormRoot);
+                xfaForm.fillXfaForm(dataToWrite);
             }
         }
         return outputStream.toByteArray();
     }
 
     /**
-     * Builds the data subtree to write into the form: a copy of the template's existing data with the incoming
-     * values applied according to <code>writeMode</code>. Fields absent from the incoming data are preserved.
+     * Builds the data subtree to write into the form during a {@link WriteMode#PATCH}: a copy of the template's
+     * existing data with the incoming values applied according to <code>patchMode</code>. Fields absent from the
+     * incoming data are preserved.
      * <p>
      * <strong>Why we start from a clone of the existing data.</strong> Because openpdf's
      * <code>fillXfaForm</code> replaces the entire form-root, the node we return must already contain the full,
      * final state of the form. Cloning the template's current data gives us every existing field for free; we then
-     * overlay only the incoming values. This is also what makes the write modes expressible: the merge can compare
+     * overlay only the incoming values. This is also what makes the patch modes expressible: the merge can compare
      * each incoming value against the existing one and decide whether to keep, replace, or reject it.
      * <p>
      * The clone (a deep copy) is used rather than mutating the live data node directly so that a
@@ -235,45 +221,45 @@ public class RestPdfApi {
      * @param existingFormRoot The template's current data form-root, or <code>null</code> if the template has no
      *                         data yet.
      * @param incomingFormRoot The form-root parsed from the caller's JSON payload.
-     * @param writeMode        The per-field merge policy to apply.
+     * @param patchMode        The per-field collision policy to apply.
      * @return The form-root node to hand to <code>fillXfaForm</code>.
      */
     private static Node mergeFormData(final Element existingFormRoot, final Element incomingFormRoot,
-                                      final WriteMode writeMode) {
+                                      final PatchMode patchMode) {
         if (existingFormRoot == null) {
             // No existing data subtree to merge against; write the incoming data as-is.
             return incomingFormRoot;
         }
         final var mergedFormRoot = existingFormRoot.cloneNode(true);
-        applyIncoming(incomingFormRoot, mergedFormRoot, writeMode, localName(incomingFormRoot));
+        applyIncoming(incomingFormRoot, mergedFormRoot, patchMode, localName(incomingFormRoot));
         return mergedFormRoot;
     }
 
     /**
-     * Recursively overlays the incoming data tree onto the merge base, applying the {@link WriteMode} policy at each
+     * Recursively overlays the incoming data tree onto the merge base, applying the {@link PatchMode} policy at each
      * leaf. The base is mutated in place; containers are matched by element name so that the two trees are walked in
      * parallel.
      * <p>
      * <strong>Why it recurses and matches by name.</strong> XFA data is a nested tree (for example
      * <code>form1 &rarr; Page1 &rarr; SSN</code>), and field identity is positional-by-name within that hierarchy,
      * not a flat key. Walking both trees together lets us line up each incoming field with its existing counterpart
-     * so the write mode can be evaluated against the correct current value. The running <code>path</code> is carried
+     * so the patch mode can be evaluated against the correct current value. The running <code>path</code> is carried
      * purely so that a conflict can report <em>which</em> field failed (for example <code>form1/Page1/SSN</code>)
      * without ever exposing the field's value.
      * <p>
      * Nodes that exist only in the incoming payload are added wholesale: a brand-new field has no existing value, so
-     * every write mode treats it as a plain insert and no conflict is possible.
+     * every patch mode treats it as a plain insert and no conflict is possible.
      *
      * @param incomingParent The current node in the caller-supplied tree being copied from.
      * @param baseParent     The corresponding node in the merge base being written to.
-     * @param writeMode      The per-field merge policy to apply.
+     * @param patchMode      The per-field collision policy to apply.
      * @param path           Slash-delimited field path to <code>incomingParent</code>, used only for conflict
      *                       reporting.
-     * @throws WriteConflictException If <code>writeMode</code> is {@link WriteMode#FAIL_ON_CONFLICT} and a leaf value
+     * @throws WriteConflictException If <code>patchMode</code> is {@link PatchMode#FAIL_ON_CONFLICT} and a leaf value
      *                                differs from a non-empty existing value.
      */
     private static void applyIncoming(final Node incomingParent, final Node baseParent,
-                                      final WriteMode writeMode, final String path) {
+                                      final PatchMode patchMode, final String path) {
         final var incomingChildren = incomingParent.getChildNodes();
         for (int i = 0; i < incomingChildren.getLength(); i++) {
             final var node = incomingChildren.item(i);
@@ -291,7 +277,7 @@ public class RestPdfApi {
                     // Brand-new subtree with no existing counterpart: import it wholesale.
                     baseParent.appendChild(baseDoc.importNode(incomingChild, true));
                 } else {
-                    applyIncoming(incomingChild, baseChild, writeMode, childPath);
+                    applyIncoming(incomingChild, baseChild, patchMode, childPath);
                 }
                 continue;
             }
@@ -299,7 +285,7 @@ public class RestPdfApi {
             final var incomingValue = textValue(incomingChild);
             final var baseChild = findChildElement(baseParent, name);
             if (baseChild == null) {
-                // New leaf field with no existing value: apply the incoming value regardless of write mode.
+                // New leaf field with no existing value: apply the incoming value regardless of patch mode.
                 final var created = baseDoc.createElement(name);
                 created.setTextContent(incomingValue);
                 baseParent.appendChild(created);
@@ -307,7 +293,7 @@ public class RestPdfApi {
             }
 
             final var existingValue = textValue(baseChild);
-            switch (writeMode) {
+            switch (patchMode) {
                 case OVERWRITE -> baseChild.setTextContent(incomingValue);
                 case IF_EMPTY -> {
                     if (existingValue.isEmpty()) {
@@ -320,48 +306,6 @@ public class RestPdfApi {
                     }
                     baseChild.setTextContent(incomingValue);
                 }
-            }
-        }
-    }
-
-    /**
-     * Blanks every leaf in the merge base that the caller did not mention in the incoming payload. Used to realize
-     * {@link PayloadMode#COMPLETE}, where the request represents the full intended dataset.
-     * <p>
-     * <strong>Why compare against the incoming tree instead of tracking what was written.</strong> "Provided" means
-     * the field appears in the request, independent of whether {@link #applyIncoming} actually changed it (for
-     * example under {@link WriteMode#IF_EMPTY} a provided field may be left as-is). Structurally comparing the base
-     * against the incoming tree captures that precisely: a base field with a matching incoming node was provided and
-     * is kept; one without a match was omitted and is cleared. This also handles brand-new subtrees for free &mdash;
-     * they originate from the incoming tree, so they always have a match and are never cleared.
-     * <p>
-     * When an incoming container is absent (<code>incomingParent</code> is <code>null</code> for a subtree), the
-     * recursion clears every descendant leaf, which is correct: the caller omitted the entire branch.
-     * <p>
-     * This runs <em>after</em> {@link #applyIncoming} so that the write-mode decisions (which depend on the original
-     * existing values) are unaffected; clearing is purely about fields the caller left out.
-     *
-     * @param baseParent     The current node in the merge base being pruned.
-     * @param incomingParent The corresponding node in the incoming tree, or <code>null</code> if the caller omitted
-     *                       this branch entirely.
-     */
-    private static void clearUnprovidedLeaves(final Node baseParent, final Node incomingParent) {
-        final var baseChildren = baseParent.getChildNodes();
-        for (int i = 0; i < baseChildren.getLength(); i++) {
-            final var node = baseChildren.item(i);
-            if (node.getNodeType() != Node.ELEMENT_NODE) {
-                continue;
-            }
-            final var baseChild = (Element) node;
-            final var incomingChild = incomingParent == null
-                    ? null : findChildElement(incomingParent, localName(baseChild));
-
-            if (hasElementChild(baseChild)) {
-                // Descend; a null incomingChild clears the whole branch.
-                clearUnprovidedLeaves(baseChild, incomingChild);
-            } else if (incomingChild == null) {
-                // Leaf the caller did not provide: blank it to reflect the declared complete dataset.
-                baseChild.setTextContent("");
             }
         }
     }
@@ -456,7 +400,7 @@ public class RestPdfApi {
     /**
      * Returns the trimmed text content of a node, or an empty string when it has none.
      * <p>
-     * Write-mode decisions hinge on whether a target is "empty" and on comparing the incoming value to the existing
+     * Patch-mode decisions hinge on whether a target is "empty" and on comparing the incoming value to the existing
      * one, so the values must be normalized first. Trimming ensures that insignificant surrounding whitespace (often
      * introduced by XML formatting) neither makes an otherwise-empty field look populated nor causes two equal
      * values to register as a conflict. Guarding against <code>null</code> keeps the comparisons total.
