@@ -81,6 +81,19 @@ class HttpTriggerFunctionsTest {
         verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
     }
 
+    @Test
+    void fillXfaDataReturnsGenericMessageForNonAllowlistedIllegalArgumentException() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":\"!!!!\",\"formData\":{\"data\":{}}}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Invalid argument in request.");
+    }
+
     private static ResponseMocks setupResponseMocks(
             final Optional<String> body,
             final Map<String, String> queryParameters) {

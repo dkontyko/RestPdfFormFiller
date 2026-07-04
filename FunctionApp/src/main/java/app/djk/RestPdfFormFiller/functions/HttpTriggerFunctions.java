@@ -23,6 +23,13 @@ import java.util.logging.Level;
  */
 public class HttpTriggerFunctions {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String GENERIC_INVALID_ARGUMENT_MESSAGE = "Invalid argument in request.";
+    private static final Set<String> SAFE_ILLEGAL_ARGUMENT_MESSAGES = Set.of(
+            "Request body must be valid JSON.",
+            "Request field 'templateBase64' must be a non-empty string.",
+            "Request field 'formData' must be a JSON object.",
+            "Request field 'formData' must contain only a 'data' object."
+    );
 
     /**
      * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
@@ -144,15 +151,21 @@ public class HttpTriggerFunctions {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid integer argument in request.", e);
         } catch (IllegalArgumentException e) {
-            final var responseMessage = Optional.ofNullable(e.getMessage())
-                    .filter(message -> !message.isBlank())
-                    .orElse("Invalid argument in request.");
+            final var responseMessage = safeIllegalArgumentResponseMessage(e);
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     responseMessage, e);
         } catch (Exception e) {
             return logAndRespond(request, context, Level.SEVERE, HttpStatus.INTERNAL_SERVER_ERROR,
                     "Request failed.", e);
         }
+    }
+
+    private static String safeIllegalArgumentResponseMessage(final IllegalArgumentException e) {
+        final var message = e.getMessage();
+        if (message != null && SAFE_ILLEGAL_ARGUMENT_MESSAGES.contains(message)) {
+            return message;
+        }
+        return GENERIC_INVALID_ARGUMENT_MESSAGE;
     }
 
     private static HttpResponseMessage logAndRespond(final HttpRequestMessage<?> request,
