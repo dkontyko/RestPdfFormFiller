@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Minimal apiProperties.json schema for CI validation. A pragmatic subset of the official paconn-apiProperties schema (https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/schemas/paconn-apiProperties.schema.json), which cannot be consumed directly because it is JSONC (contains comments).",
+  "title": "apiProperties.json schema for CI validation. A subset of the official paconn-apiProperties schema (https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/schemas/paconn-apiProperties.schema.json), which cannot be consumed directly because it is JSONC (contains comments). Like the official schema, this uses additionalProperties:false as an allowlist to catch typos and unknown fields (which Power Platform also rejects), so the property list must be kept in sync with the official field set.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -35,6 +35,12 @@
         },
         "policyTemplateInstances": {
           "type": "array"
+        },
+        "scriptOperations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "connectionParameters": {
           "type": "object",
