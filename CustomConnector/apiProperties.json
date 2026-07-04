@@ -1,0 +1,22 @@
+{
+    "properties": {
+        "connectionParameters": {
+            "api_key": {
+                "type": "securestring",
+                "uiDefinition": {
+                    "displayName": "Azure Functions key",
+                    "description": "The Azure Functions key (x-functions-key) for the RestPdfFormFiller function app. Interim auth while OAuth is being validated.",
+                    "tooltip": "Provide the Azure Functions host or function key",
+                    "constraints": {
+                        "tabIndex": 2,
+                        "clearText": false,
+                        "required": "true"
+                    }
+                }
+            }
+        },
+        "iconBrandColor": "#007ee5",
+        "capabilities": [],
+        "policyTemplateInstances": []
+    }
+}
