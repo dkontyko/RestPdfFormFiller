@@ -44,12 +44,16 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
+            HttpRequestMessage<Optional<byte[]>> request,
             final ExecutionContext context) {
 
         return errorHandler(request, context, () -> {
-            // Checking if a body was received in the HTTP request.
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+            // The PDF arrives as the raw binary request body (no Base64), so a Power Automate flow can pass a
+            // SharePoint/OneDrive "Get file content" result straight through without any conversion.
+            final var requestBytes = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+            if (requestBytes.length == 0) {
+                throw new EmptyRequestBodyException();
+            }
 
             // Return format supplied as URL query parameter. See RestPdfApi for valid formats.
             final var returnDataFormat = request.getQueryParameters().get("format");
@@ -58,8 +62,6 @@ public class HttpTriggerFunctions {
                 throw new InvalidReturnDataFormatException();
             }
 
-            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            final var requestBytes = Base64.getDecoder().decode(requestBody);
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
             var datasetsString = RestPdfApi.getXfaDatasetNodeAsString(requestBytes);
@@ -76,13 +78,15 @@ public class HttpTriggerFunctions {
                     name = "req",
                     methods = {HttpMethod.POST},
                     authLevel = AuthorizationLevel.FUNCTION)
-            HttpRequestMessage<Optional<String>> request,
+            HttpRequestMessage<Optional<byte[]>> request,
             final ExecutionContext context) {
 
         return errorHandler(request, context, () -> {
-            final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
-            // The function expects the PDF to be encoded in Base64 for safe transit over the internet.
-            final var requestBytes = Base64.getDecoder().decode(requestBody);
+            // The PDF arrives as the raw binary request body (no Base64), matching the other read endpoint.
+            final var requestBytes = request.getBody().orElseThrow(EmptyRequestBodyException::new);
+            if (requestBytes.length == 0) {
+                throw new EmptyRequestBodyException();
+            }
             context.getLogger().info("Request length (number of bytes): " + requestBytes.length);
 
             final var dataSchema = DataFormatter.generateJsonSchema(RestPdfApi.getXfaDatasetNodeAsString(requestBytes));
@@ -119,9 +123,14 @@ public class HttpTriggerFunctions {
 
             final var filledPdfBytes = RestPdfApi.fillXfaForm(
                     templateBytes, fillRequest.formDataJson(), fillRequest.writeMode(), fillRequest.patchMode());
-            final var base64EncodedForm = Base64.getEncoder().encodeToString(filledPdfBytes);
 
-            return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
+            // Return the filled PDF as raw binary (application/pdf) so Power Automate treats the response as a file
+            // that drops straight into a "Create file" action -- no Base64-to-binary conversion, and no risk of the
+            // document being corrupted by passing it through a JSON string layer.
+            return request.createResponseBuilder(HttpStatus.OK)
+                    .header("Content-Type", "application/pdf")
+                    .body(filledPdfBytes)
+                    .build();
         });
     }
 
@@ -169,6 +178,11 @@ public class HttpTriggerFunctions {
         } catch (IllegalArgumentException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid argument in request.", e);
+        } catch (java.io.IOException e) {
+            // Every request in this app is processed against in-memory PDF bytes, so an IOException here means the
+            // caller's PDF could not be parsed rather than a genuine infrastructure failure. Report it as a 400.
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    "Invalid or corrupted PDF file.", e);
         } catch (Exception e) {
             return logAndRespond(request, context, Level.SEVERE, HttpStatus.INTERNAL_SERVER_ERROR,
                     "Request failed.", e);
