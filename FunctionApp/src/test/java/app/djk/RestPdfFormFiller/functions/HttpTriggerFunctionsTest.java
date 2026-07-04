@@ -65,7 +65,7 @@ class HttpTriggerFunctionsTest {
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
+        verify(responseMocks.builder()).body("Request body must be valid JSON.");
     }
 
     @Test
@@ -78,7 +78,7 @@ class HttpTriggerFunctionsTest {
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
+        verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
     }
 
     private static ResponseMocks setupResponseMocks(

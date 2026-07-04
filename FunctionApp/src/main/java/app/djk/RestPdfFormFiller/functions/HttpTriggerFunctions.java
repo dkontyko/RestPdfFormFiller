@@ -144,8 +144,11 @@ public class HttpTriggerFunctions {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid integer argument in request.", e);
         } catch (IllegalArgumentException e) {
+            final var responseMessage = Optional.ofNullable(e.getMessage())
+                    .filter(message -> !message.isBlank())
+                    .orElse("Invalid argument in request.");
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
-                    "Invalid argument in request.", e);
+                    responseMessage, e);
         } catch (Exception e) {
             return logAndRespond(request, context, Level.SEVERE, HttpStatus.INTERNAL_SERVER_ERROR,
                     "Request failed.", e);
