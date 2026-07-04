@@ -39,6 +39,10 @@ jobs:
             --applicationId "${{ secrets.AZURE_CLIENT_ID }}" `
             --tenant "${{ secrets.AZURE_TENANT_ID }}" `
             --environment "${{ vars.PP_ENVIRONMENT_URL }}"
+          # pac is a native command: PowerShell does not fail the step on a
+          # non-zero exit code, and $ErrorActionPreference does not apply. Guard
+          # explicitly so an auth failure stops here instead of surfacing later.
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Deploy connector (create on first run, update thereafter)
         env:
