@@ -178,9 +178,11 @@ public class HttpTriggerFunctions {
         } catch (IllegalArgumentException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid argument in request.", e);
-        } catch (java.io.IOException e) {
+        } catch (java.io.IOException | javax.xml.transform.TransformerException e) {
             // Every request in this app is processed against in-memory PDF bytes, so an IOException here means the
-            // caller's PDF could not be parsed rather than a genuine infrastructure failure. Report it as a 400.
+            // caller's PDF could not be parsed rather than a genuine infrastructure failure. A TransformerException
+            // likewise means the caller's XFA dataset could not be serialized. Both are client-side problems, so
+            // report them as a 400 rather than letting them fall through to the generic 500.
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid or corrupted PDF file.", e);
         } catch (Exception e) {
