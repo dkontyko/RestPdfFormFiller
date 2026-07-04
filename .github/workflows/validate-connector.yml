@@ -28,7 +28,9 @@ jobs:
           python -c "import json; [json.load(open(f)) for f in ('CustomConnector/PdfFormFiller.swagger.json','CustomConnector/apiProperties.json','CustomConnector/apiProperties.schema.json')]; print('JSON OK')"
 
       - name: Install validators (openapi-spec-validator + check-jsonschema)
-        run: pip install openapi-spec-validator check-jsonschema
+        # Use `python -m pip` so packages install into the same interpreter used
+        # above (bare `pip` may resolve to a different Python on Windows images).
+        run: python -m pip install openapi-spec-validator check-jsonschema
 
       - name: Validate the OpenAPI (Swagger 2.0) definition
         # openapi-spec-validator checks the swagger against the OpenAPI 2.0 spec
