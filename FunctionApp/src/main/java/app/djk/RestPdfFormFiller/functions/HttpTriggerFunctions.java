@@ -1,12 +1,15 @@
 package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.DataFormatter;
+import app.djk.RestPdfFormFiller.Pdf.PatchMode;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
+import app.djk.RestPdfFormFiller.Pdf.WriteMode;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import app.djk.RestPdfFormFiller.projectExceptions.SafeToReturnIllegalArgumentException;
+import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
@@ -15,7 +18,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeType;
 
-import java.io.ByteArrayInputStream;
 import java.util.*;
 import java.util.logging.Level;
 
@@ -115,9 +117,8 @@ public class HttpTriggerFunctions {
                 return request.createResponseBuilder(HttpStatus.OK).body("Validation succeeded.").build();
             }
 
-            final var templateStream = new ByteArrayInputStream(templateBytes);
-
-            final var filledPdfBytes = RestPdfApi.fillXfaForm(templateStream, fillRequest.formDataJson());
+            final var filledPdfBytes = RestPdfApi.fillXfaForm(
+                    templateBytes, fillRequest.formDataJson(), fillRequest.writeMode(), fillRequest.patchMode());
             final var base64EncodedForm = Base64.getEncoder().encodeToString(filledPdfBytes);
 
             return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
@@ -156,6 +157,9 @@ public class HttpTriggerFunctions {
                     "Invalid session ID.", e);
         } catch (SafeToReturnIllegalArgumentException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    e.getMessage(), e);
+        } catch (WriteConflictException e) {
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.CONFLICT,
                     e.getMessage(), e);
         }
         // Dependency and built-in exceptions
@@ -220,35 +224,46 @@ public class HttpTriggerFunctions {
             throw new SafeToReturnIllegalArgumentException("Request field 'formData' must contain only a 'data' object.");
         }
 
-        final var payloadMode = parsePayloadMode(rootNode.path("payloadMode"));
         final var writeMode = parseWriteMode(rootNode.path("writeMode"));
+
+        final var patchModeNode = rootNode.path("patchMode");
+        final var patchModeProvided = !(patchModeNode.isMissingNode() || patchModeNode.isNull());
+        final var patchMode = parsePatchMode(patchModeNode);
+        // patchMode is the collision policy for a merge, so it is meaningless for a full replacement. Reject the
+        // contradictory combination explicitly rather than silently ignoring it, so a caller who expected their
+        // provided values to be protected is not surprised by a full overwrite.
+        if (writeMode == WriteMode.PUT && patchModeProvided) {
+            throw new SafeToReturnIllegalArgumentException(
+                    "Request field 'patchMode' is only valid when 'writeMode' is 'patch'.");
+        }
+
         final var validateOnly = parseValidateOnly(rootNode.path("validateOnly"));
 
-        return new FillRequest(templateBase64, formDataNode.toString(), payloadMode, writeMode, validateOnly);
-    }
-
-    private static PayloadMode parsePayloadMode(final JsonNode payloadModeNode) {
-        if (payloadModeNode.isMissingNode() || payloadModeNode.isNull()) {
-            return PayloadMode.PARTIAL;
-        }
-        final var mode = payloadModeNode.getNodeType() == JsonNodeType.STRING
-                ? PayloadMode.fromValue(payloadModeNode.stringValue()) : null;
-        if (mode == null) {
-            throw new SafeToReturnIllegalArgumentException(
-                    "Request field 'payloadMode' must be one of the following strings: partial, complete.");
-        }
-        return mode;
+        return new FillRequest(templateBase64, formDataNode.toString(), writeMode, patchMode, validateOnly);
     }
 
     private static WriteMode parseWriteMode(final JsonNode writeModeNode) {
         if (writeModeNode.isMissingNode() || writeModeNode.isNull()) {
-            return WriteMode.OVERWRITE;
+            return WriteMode.PATCH;
         }
         final var mode = writeModeNode.getNodeType() == JsonNodeType.STRING
                 ? WriteMode.fromValue(writeModeNode.stringValue()) : null;
         if (mode == null) {
             throw new SafeToReturnIllegalArgumentException(
-                    "Request field 'writeMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
+                    "Request field 'writeMode' must be one of the following strings: patch, put.");
+        }
+        return mode;
+    }
+
+    private static PatchMode parsePatchMode(final JsonNode patchModeNode) {
+        if (patchModeNode.isMissingNode() || patchModeNode.isNull()) {
+            return PatchMode.OVERWRITE;
+        }
+        final var mode = patchModeNode.getNodeType() == JsonNodeType.STRING
+                ? PatchMode.fromValue(patchModeNode.stringValue()) : null;
+        if (mode == null) {
+            throw new SafeToReturnIllegalArgumentException(
+                    "Request field 'patchMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
         }
         return mode;
     }
@@ -284,15 +299,13 @@ public class HttpTriggerFunctions {
      *
      * @param templateBase64 Base64-encoded source PDF content.
      * @param formDataJson   JSON object string containing a single <code>data</code> object.
-     * @param payloadMode    Describes payload completeness expectations.
-     *                       <code>PARTIAL</code> means omitted fields are treated as "no change".
-     *                       <code>COMPLETE</code> means the client intends to provide a complete
-     *                       object for the target schema.
-     * @param writeMode      Describes how provided values should interact with existing form values.
-     *                       <code>OVERWRITE</code> means provided values replace existing values,
-     *                       <code>IF_EMPTY</code> means provided values only write into empty targets,
-     *                       and <code>FAIL_ON_CONFLICT</code> means conflicting non-empty targets
-     *                       should be rejected.
+     * @param writeMode      Overall fill strategy. <code>PATCH</code> merges the request into the existing form
+     *                       (omitted fields preserved); <code>PUT</code> replaces the whole form (omitted fields
+     *                       cleared).
+     * @param patchMode      Collision policy for provided fields under <code>PATCH</code>.
+     *                       <code>OVERWRITE</code> replaces existing values, <code>IF_EMPTY</code> writes only into
+     *                       empty targets, and <code>FAIL_ON_CONFLICT</code> rejects a different non-empty target.
+     *                       Ignored under <code>PUT</code> (and rejected if supplied with it).
      * @param validateOnly   If true, run request validation and return success/failure without returning
      *                       a filled document body. This mode is for validation workflows where callers
      *                       want contract checks without emitting filled output.
@@ -300,70 +313,8 @@ public class HttpTriggerFunctions {
     private record FillRequest(
             String templateBase64,
             String formDataJson,
-            PayloadMode payloadMode,
             WriteMode writeMode,
+            PatchMode patchMode,
             boolean validateOnly) {
-    }
-
-    /**
-     * Payload completeness mode for <code>FillXfaData</code>.
-     */
-    private enum PayloadMode {
-        /**
-         * Client is sending a subset of fields to be considered as a patch.
-         */
-        PARTIAL("partial"),
-        /**
-         * Client is sending a full object intended to represent the complete data shape.
-         */
-        COMPLETE("complete");
-
-        private final String value;
-
-        PayloadMode(final String value) {
-            this.value = value;
-        }
-
-        static PayloadMode fromValue(final String value) {
-            for (final var mode : values()) {
-                if (mode.value.equals(value)) {
-                    return mode;
-                }
-            }
-            return null;
-        }
-    }
-
-    /**
-     * Write conflict mode for <code>FillXfaData</code>.
-     */
-    private enum WriteMode {
-        /**
-         * Provided values replace existing target values.
-         */
-        OVERWRITE("overwrite"),
-        /**
-         * Provided values are applied only when the existing target value is empty.
-         */
-        IF_EMPTY("ifEmpty"),
-        /**
-         * Provided values that conflict with non-empty existing target values should be rejected.
-         */
-        FAIL_ON_CONFLICT("failOnConflict");
-
-        private final String value;
-
-        WriteMode(final String value) {
-            this.value = value;
-        }
-
-        static WriteMode fromValue(final String value) {
-            for (final var mode : values()) {
-                if (mode.value.equals(value)) {
-                    return mode;
-                }
-            }
-            return null;
-        }
     }
 }

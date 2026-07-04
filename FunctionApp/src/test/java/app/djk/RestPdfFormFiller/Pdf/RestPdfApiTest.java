@@ -2,6 +2,7 @@ package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormDataException;
+import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
 import org.junit.jupiter.api.Test;
 import org.openpdf.text.Document;
 import org.openpdf.text.Paragraph;
@@ -11,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,6 +53,147 @@ class RestPdfApiTest {
 
         assertThrows(InvalidXfaFormDataException.class,
                 () -> RestPdfApi.fillXfaForm(samplePdfBytes, invalidJsonFormData));
+    }
+
+    @Test
+    void fillXfaFormPatchOverwriteReplacesProvidedAndPreservesUntouchedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"},"
+                + "\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Provided value replaced the existing one.
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        assertFalse(resultXml.contains("<SSN>123-45-6789</SSN>"));
+        // Previously empty target was filled.
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+        // A field not present in the request kept its existing value.
+        assertTrue(resultXml.contains("<EFFECITIVE>9988</EFFECITIVE>"));
+    }
+
+    @Test
+    void fillXfaFormPatchIfEmptyOnlyWritesIntoEmptyTargets() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"},"
+                + "\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.IF_EMPTY);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Non-empty existing target was left unchanged.
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+        assertFalse(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Empty target was filled.
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+    }
+
+    @Test
+    void fillXfaFormPatchFailOnConflictThrowsWhenValueDiffersFromNonEmptyTarget() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var conflict = assertThrows(WriteConflictException.class,
+                () -> RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.PATCH, PatchMode.FAIL_ON_CONFLICT));
+        assertEquals("Write conflict at field 'form1/Page1/SSN': target already has a different value.",
+                conflict.getMessage());
+    }
+
+    @Test
+    void fillXfaFormPatchFailOnConflictSucceedsWhenTargetIsEmpty() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.FAIL_ON_CONFLICT);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+        // Unrelated non-empty field is preserved.
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+    }
+
+    @Test
+    void fillXfaFormPatchFailOnConflictSucceedsWhenValueMatchesExisting() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"123-45-6789\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.FAIL_ON_CONFLICT);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+    }
+
+    @Test
+    void fillXfaFormPutReplacesEntireFormClearingUnprovidedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PUT, PatchMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Provided field is written.
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Fields the caller did not mention are gone (their previous values are cleared).
+        assertFalse(resultXml.contains("9988"));
+        assertFalse(resultXml.contains("6543"));
+        // Including fields on an entirely-omitted branch (Page2).
+        assertFalse(resultXml.contains("222222222"));
+    }
+
+    @Test
+    void fillXfaFormPatchPreservesUnprovidedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Unmentioned fields keep their existing values.
+        assertTrue(resultXml.contains("9988"));
+        assertTrue(resultXml.contains("6543"));
+        assertTrue(resultXml.contains("222222222"));
+    }
+
+    @Test
+    void fillXfaFormPutIgnoresPatchMode() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        // SSN's existing value is non-empty; under PATCH+IF_EMPTY it would be kept, but PUT always replaces.
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PUT, PatchMode.IF_EMPTY);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // PUT overwrote the provided field regardless of patchMode...
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        assertFalse(resultXml.contains("123-45-6789"));
+        // ...and cleared unprovided fields.
+        assertFalse(resultXml.contains("9988"));
+    }
+
+    @Test
+    void fillXfaFormPutWithEmptyDataClearsAllFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        // Empty data object: no form-root provided, so PUT should clear every field.
+        final var formData = "{\"data\":{}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PUT, PatchMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // All previously-populated field values are gone.
+        assertFalse(resultXml.contains("123-45-6789"));
+        assertFalse(resultXml.contains("9988"));
+        assertFalse(resultXml.contains("6543"));
+        assertFalse(resultXml.contains("222222222"));
     }
 
     private static byte[] readSampleDa4187Pdf() throws Exception {
