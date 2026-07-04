@@ -101,12 +101,20 @@ public class HttpTriggerFunctions {
         return errorHandler(request, context, () -> {
             final var requestBody = request.getBody().orElseThrow(EmptyRequestBodyException::new);
             final var fillRequest = parseFillRequest(requestBody);
+            final var templateBytes = Base64.getDecoder().decode(fillRequest.templateBase64());
+
+            try {
+                if (!RestPdfApi.isXfaForm(templateBytes)) {
+                    throw new InvalidXfaFormException();
+                }
+            } catch (java.io.IOException e) {
+                throw new InvalidXfaFormException();
+            }
 
             if (fillRequest.validateOnly()) {
                 return request.createResponseBuilder(HttpStatus.OK).body("Validation succeeded.").build();
             }
 
-            final var templateBytes = Base64.getDecoder().decode(fillRequest.templateBase64());
             final var templateStream = new ByteArrayInputStream(templateBytes);
 
             final var filledPdfBytes = RestPdfApi.fillXfaForm(templateStream, fillRequest.formDataJson());
@@ -195,8 +203,11 @@ public class HttpTriggerFunctions {
         final var rootNode = parseRequestBodyAsJson(requestBody);
 
         final var templateNode = rootNode.path("templateBase64");
+        if (templateNode.getNodeType() != JsonNodeType.STRING) {
+            throw new SafeToReturnIllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
+        }
         final var templateBase64 = templateNode.stringValue();
-        if (templateNode.getNodeType() != JsonNodeType.STRING || templateBase64 == null || templateBase64.isBlank()) {
+        if (templateBase64 == null || templateBase64.isBlank()) {
             throw new SafeToReturnIllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
         }
 
