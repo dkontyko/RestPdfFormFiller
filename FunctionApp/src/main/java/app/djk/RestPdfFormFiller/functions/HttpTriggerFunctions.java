@@ -10,7 +10,6 @@ import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import com.microsoft.kiota.ApiException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeType;
@@ -141,10 +140,7 @@ public class HttpTriggerFunctions {
                     "Invalid session ID.", e);
         }
         // Dependency and built-in exceptions
-        catch (ApiException e) {
-            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
-                    "Could not retrieve file.", e);
-        } catch (NumberFormatException e) {
+        catch (NumberFormatException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid integer argument in request.", e);
         } catch (IllegalArgumentException e) {
