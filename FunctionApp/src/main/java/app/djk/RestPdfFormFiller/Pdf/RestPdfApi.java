@@ -194,7 +194,9 @@ public class RestPdfApi {
                 if (writeMode == WriteMode.PUT) {
                     dataToWrite = incomingFormRoot;
                 } else {
-                    final var existingFormRoot = firstElementChild(xfaForm.getDatasetsNode().getFirstChild());
+                    // Same shape as the incoming data: <xfa:datasets><xfa:data><formRoot>. Descend by element
+                    // (not getFirstChild(), which can be a whitespace text node) so we reliably reach the form-root.
+                    final var existingFormRoot = firstElementChild(firstElementChild(xfaForm.getDatasetsNode()));
                     dataToWrite = mergeFormData(existingFormRoot, incomingFormRoot, patchMode);
                 }
                 xfaForm.fillXfaForm(dataToWrite);
