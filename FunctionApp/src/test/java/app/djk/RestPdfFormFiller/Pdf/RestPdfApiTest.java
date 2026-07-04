@@ -124,6 +124,58 @@ class RestPdfApiTest {
         assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
     }
 
+    @Test
+    void fillXfaFormCompletePayloadClearsUnprovidedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.OVERWRITE, PayloadMode.COMPLETE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Provided field is written.
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Fields the caller did not mention are blanked (their previous values are gone).
+        assertFalse(resultXml.contains("9988"));
+        assertFalse(resultXml.contains("6543"));
+        // Including fields on an entirely-omitted branch (Page2).
+        assertFalse(resultXml.contains("222222222"));
+    }
+
+    @Test
+    void fillXfaFormPartialPayloadPreservesUnprovidedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.OVERWRITE, PayloadMode.PARTIAL);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Unmentioned fields keep their existing values.
+        assertTrue(resultXml.contains("9988"));
+        assertTrue(resultXml.contains("6543"));
+        assertTrue(resultXml.contains("222222222"));
+    }
+
+    @Test
+    void fillXfaFormCompletePayloadKeepsProvidedFieldsUnwrittenByIfEmpty() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        // SSN is provided but its existing value is non-empty, so IF_EMPTY leaves it as-is.
+        // EFFECITIVE (9988) is not provided, so COMPLETE must clear it.
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.IF_EMPTY, PayloadMode.COMPLETE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Provided field is kept (IF_EMPTY did not overwrite the non-empty existing value) and NOT cleared.
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+        assertFalse(resultXml.contains("999-99-9999"));
+        // Unprovided field is cleared.
+        assertFalse(resultXml.contains("9988"));
+    }
+
     private static byte[] readSampleDa4187Pdf() throws Exception {
         final var moduleRoot = Path.of("").toAbsolutePath();
         final var sampleInRepoRoot = moduleRoot.resolve("../resources/DA4187/A4187.pdf").normalize();

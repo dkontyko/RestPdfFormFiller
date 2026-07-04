@@ -1,6 +1,7 @@
 package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.DataFormatter;
+import app.djk.RestPdfFormFiller.Pdf.PayloadMode;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
 import app.djk.RestPdfFormFiller.Pdf.WriteMode;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
@@ -117,7 +118,7 @@ public class HttpTriggerFunctions {
             }
 
             final var filledPdfBytes = RestPdfApi.fillXfaForm(
-                    templateBytes, fillRequest.formDataJson(), fillRequest.writeMode());
+                    templateBytes, fillRequest.formDataJson(), fillRequest.writeMode(), fillRequest.payloadMode());
             final var base64EncodedForm = Base64.getEncoder().encodeToString(filledPdfBytes);
 
             return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
@@ -306,34 +307,5 @@ public class HttpTriggerFunctions {
             PayloadMode payloadMode,
             WriteMode writeMode,
             boolean validateOnly) {
-    }
-
-    /**
-     * Payload completeness mode for <code>FillXfaData</code>.
-     */
-    private enum PayloadMode {
-        /**
-         * Client is sending a subset of fields to be considered as a patch.
-         */
-        PARTIAL("partial"),
-        /**
-         * Client is sending a full object intended to represent the complete data shape.
-         */
-        COMPLETE("complete");
-
-        private final String value;
-
-        PayloadMode(final String value) {
-            this.value = value;
-        }
-
-        static PayloadMode fromValue(final String value) {
-            for (final var mode : values()) {
-                if (mode.value.equals(value)) {
-                    return mode;
-                }
-            }
-            return null;
-        }
     }
 }

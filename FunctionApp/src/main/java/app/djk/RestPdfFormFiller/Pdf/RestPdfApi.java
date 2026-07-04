@@ -127,23 +127,13 @@ public class RestPdfApi {
     }
 
     /**
-     * Fills an XFA form with the provided data, honoring the requested {@link WriteMode}. Fields present in the
-     * template but absent from <code>jsonFormData</code> retain their existing values.
+     * Convenience overload that fills using {@link PayloadMode#PARTIAL} (fields absent from the request keep their
+     * existing values).
      * <p>
-     * <strong>Why the implementation looks the way it does.</strong> Two openpdf behaviors drive the design:
-     * <ul>
-     *   <li><em>Write-back requires the live form.</em> Only the <code>XfaForm</code> obtained from the stamper's
-     *       <code>AcroFields.getXfa()</code> is serialized back into the document when the stamper closes. A
-     *       detached <code>new XfaForm(reader)</code> can be modified but its changes are silently dropped, so we
-     *       deliberately fetch the form via the stamper.</li>
-     *   <li><em>{@code fillXfaForm} replaces the whole data subtree.</em> openpdf swaps out the entire
-     *       <code>&lt;xfa:data&gt;</code> form-root rather than merging field by field. Any field missing from the
-     *       node we hand it would therefore be <em>erased</em>, not left alone. To preserve untouched fields and to
-     *       implement the per-field write modes, we merge the incoming values onto a copy of the template's existing
-     *       data ourselves (see {@link #mergeFormData}) and pass that complete subtree.</li>
-     * </ul>
-     * The XFA presence check happens up front so that a non-XFA PDF fails fast with a caller-safe error before we
-     * open a stamper.
+     * Partial is the default so that callers who send a patch are not required to reason about the payload-mode
+     * distinction, and because it is the non-destructive choice: nothing the caller omits is touched. Callers that
+     * intend a full replacement opt in explicitly via
+     * {@link #fillXfaForm(byte[], String, WriteMode, PayloadMode)}.
      *
      * @param pdfBytes     Source XFA PDF content.
      * @param jsonFormData JSON object string of the form <code>{"data": { ... }}</code>.
@@ -157,6 +147,47 @@ public class RestPdfApi {
      * @throws SAXException                 If the converted form data cannot be parsed as XML.
      */
     public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData, final WriteMode writeMode)
+            throws IOException, ParserConfigurationException, SAXException {
+        return fillXfaForm(pdfBytes, jsonFormData, writeMode, PayloadMode.PARTIAL);
+    }
+
+    /**
+     * Fills an XFA form with the provided data, honoring both the {@link WriteMode} (how provided values interact
+     * with existing ones) and the {@link PayloadMode} (what happens to fields absent from the request).
+     * <p>
+     * <strong>Why the implementation looks the way it does.</strong> Two openpdf behaviors drive the design:
+     * <ul>
+     *   <li><em>Write-back requires the live form.</em> Only the <code>XfaForm</code> obtained from the stamper's
+     *       <code>AcroFields.getXfa()</code> is serialized back into the document when the stamper closes. A
+     *       detached <code>new XfaForm(reader)</code> can be modified but its changes are silently dropped, so we
+     *       deliberately fetch the form via the stamper.</li>
+     *   <li><em>{@code fillXfaForm} replaces the whole data subtree.</em> openpdf swaps out the entire
+     *       <code>&lt;xfa:data&gt;</code> form-root rather than merging field by field. Any field missing from the
+     *       node we hand it would therefore be <em>erased</em>, not left alone. To preserve untouched fields and to
+     *       implement the per-field write modes, we merge the incoming values onto a copy of the template's existing
+     *       data ourselves (see {@link #mergeFormData}) and pass that complete subtree.</li>
+     * </ul>
+     * The two selectors are applied in sequence: {@link #mergeFormData} overlays provided values per
+     * <code>writeMode</code>, and then &mdash; only for {@link PayloadMode#COMPLETE} &mdash;
+     * {@link #clearUnprovidedLeaves} blanks any remaining field the caller did not mention, so the result reflects
+     * the "complete dataset" the caller declared. The XFA presence check happens up front so that a non-XFA PDF
+     * fails fast with a caller-safe error before we open a stamper.
+     *
+     * @param pdfBytes     Source XFA PDF content.
+     * @param jsonFormData JSON object string of the form <code>{"data": { ... }}</code>.
+     * @param writeMode    Controls how provided values interact with existing target values.
+     * @param payloadMode  Controls whether fields absent from the request are preserved
+     *                     ({@link PayloadMode#PARTIAL}) or cleared ({@link PayloadMode#COMPLETE}).
+     * @return The filled PDF as a byte array.
+     * @throws InvalidXfaFormException      If the PDF is not an XFA form.
+     * @throws WriteConflictException       If <code>writeMode</code> is {@link WriteMode#FAIL_ON_CONFLICT} and a
+     *                                      provided value would overwrite a different, non-empty existing value.
+     * @throws IOException                  If the PDF cannot be parsed or stamped.
+     * @throws ParserConfigurationException If the JSON-to-XML conversion cannot create an XML document.
+     * @throws SAXException                 If the converted form data cannot be parsed as XML.
+     */
+    public static byte[] fillXfaForm(final byte[] pdfBytes, final String jsonFormData, final WriteMode writeMode,
+                                     final PayloadMode payloadMode)
             throws IOException, ParserConfigurationException, SAXException {
         if (!isXfaForm(pdfBytes)) throw new InvalidXfaFormException();
 
@@ -175,6 +206,10 @@ public class RestPdfApi {
             if (incomingFormRoot != null) {
                 final var existingFormRoot = firstElementChild(xfaForm.getDatasetsNode().getFirstChild());
                 final var mergedFormRoot = mergeFormData(existingFormRoot, incomingFormRoot, writeMode);
+                if (payloadMode == PayloadMode.COMPLETE) {
+                    // The caller declared a complete dataset, so any field it did not mention must be blanked.
+                    clearUnprovidedLeaves(mergedFormRoot, incomingFormRoot);
+                }
                 // fillXfaForm replaces the entire data subtree, so mergedFormRoot must contain every field
                 // that should remain in the document (existing values plus the applied incoming values).
                 xfaForm.fillXfaForm(mergedFormRoot);
@@ -285,6 +320,48 @@ public class RestPdfApi {
                     }
                     baseChild.setTextContent(incomingValue);
                 }
+            }
+        }
+    }
+
+    /**
+     * Blanks every leaf in the merge base that the caller did not mention in the incoming payload. Used to realize
+     * {@link PayloadMode#COMPLETE}, where the request represents the full intended dataset.
+     * <p>
+     * <strong>Why compare against the incoming tree instead of tracking what was written.</strong> "Provided" means
+     * the field appears in the request, independent of whether {@link #applyIncoming} actually changed it (for
+     * example under {@link WriteMode#IF_EMPTY} a provided field may be left as-is). Structurally comparing the base
+     * against the incoming tree captures that precisely: a base field with a matching incoming node was provided and
+     * is kept; one without a match was omitted and is cleared. This also handles brand-new subtrees for free &mdash;
+     * they originate from the incoming tree, so they always have a match and are never cleared.
+     * <p>
+     * When an incoming container is absent (<code>incomingParent</code> is <code>null</code> for a subtree), the
+     * recursion clears every descendant leaf, which is correct: the caller omitted the entire branch.
+     * <p>
+     * This runs <em>after</em> {@link #applyIncoming} so that the write-mode decisions (which depend on the original
+     * existing values) are unaffected; clearing is purely about fields the caller left out.
+     *
+     * @param baseParent     The current node in the merge base being pruned.
+     * @param incomingParent The corresponding node in the incoming tree, or <code>null</code> if the caller omitted
+     *                       this branch entirely.
+     */
+    private static void clearUnprovidedLeaves(final Node baseParent, final Node incomingParent) {
+        final var baseChildren = baseParent.getChildNodes();
+        for (int i = 0; i < baseChildren.getLength(); i++) {
+            final var node = baseChildren.item(i);
+            if (node.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            final var baseChild = (Element) node;
+            final var incomingChild = incomingParent == null
+                    ? null : findChildElement(incomingParent, localName(baseChild));
+
+            if (hasElementChild(baseChild)) {
+                // Descend; a null incomingChild clears the whole branch.
+                clearUnprovidedLeaves(baseChild, incomingChild);
+            } else if (incomingChild == null) {
+                // Leaf the caller did not provide: blank it to reflect the declared complete dataset.
+                baseChild.setTextContent("");
             }
         }
     }
