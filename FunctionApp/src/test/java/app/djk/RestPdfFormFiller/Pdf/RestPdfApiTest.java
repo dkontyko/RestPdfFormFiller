@@ -179,6 +179,23 @@ class RestPdfApiTest {
         assertFalse(resultXml.contains("9988"));
     }
 
+    @Test
+    void fillXfaFormPutWithEmptyDataClearsAllFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        // Empty data object: no form-root provided, so PUT should clear every field.
+        final var formData = "{\"data\":{}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PUT, PatchMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // All previously-populated field values are gone.
+        assertFalse(resultXml.contains("123-45-6789"));
+        assertFalse(resultXml.contains("9988"));
+        assertFalse(resultXml.contains("6543"));
+        assertFalse(resultXml.contains("222222222"));
+    }
+
     private static byte[] readSampleDa4187Pdf() throws Exception {
         final var moduleRoot = Path.of("").toAbsolutePath();
         final var sampleInRepoRoot = moduleRoot.resolve("../resources/DA4187/A4187.pdf").normalize();

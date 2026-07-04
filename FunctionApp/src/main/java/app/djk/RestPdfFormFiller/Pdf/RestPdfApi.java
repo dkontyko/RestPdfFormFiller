@@ -187,18 +187,31 @@ public class RestPdfApi {
             final var incomingDoc = DataFormatter.convertJsonToXml(jsonFormData);
             final var incomingFormRoot = firstElementChild(firstElementChild(incomingDoc.getDocumentElement()));
 
-            if (incomingFormRoot != null) {
+            // Existing shape: <xfa:datasets><xfa:data><formRoot>. Descend by element (not getFirstChild(), which
+            // can be a whitespace text node) so we reliably reach the form-root.
+            final var existingFormRoot = firstElementChild(firstElementChild(xfaForm.getDatasetsNode()));
+
+            final Node dataToWrite;
+            if (writeMode == WriteMode.PUT) {
                 // PUT replaces the entire form, which is exactly what openpdf's fillXfaForm does with the incoming
-                // data, so PATCH is the only mode that needs to merge against (and thus preserve) existing values.
-                final Node dataToWrite;
-                if (writeMode == WriteMode.PUT) {
+                // data. A caller who supplies no form-root (e.g. {"data":{}}) is asking to clear every field, so
+                // synthesize an empty form-root that reuses the template's form-root name; writing it replaces the
+                // populated subtree with an empty one. With no existing form-root either, there is nothing to clear.
+                if (incomingFormRoot != null) {
                     dataToWrite = incomingFormRoot;
+                } else if (existingFormRoot != null) {
+                    dataToWrite = incomingDoc.createElement(localName(existingFormRoot));
                 } else {
-                    // Same shape as the incoming data: <xfa:datasets><xfa:data><formRoot>. Descend by element
-                    // (not getFirstChild(), which can be a whitespace text node) so we reliably reach the form-root.
-                    final var existingFormRoot = firstElementChild(firstElementChild(xfaForm.getDatasetsNode()));
-                    dataToWrite = mergeFormData(existingFormRoot, incomingFormRoot, patchMode);
+                    dataToWrite = null;
                 }
+            } else {
+                // PATCH: an empty incoming payload means "change nothing", so only merge when a form-root was
+                // provided. PATCH is the only mode that merges against (and thus preserves) existing values.
+                dataToWrite = incomingFormRoot != null
+                        ? mergeFormData(existingFormRoot, incomingFormRoot, patchMode) : null;
+            }
+
+            if (dataToWrite != null) {
                 xfaForm.fillXfaForm(dataToWrite);
             }
         }
