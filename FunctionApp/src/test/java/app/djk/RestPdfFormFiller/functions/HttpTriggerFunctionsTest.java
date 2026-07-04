@@ -45,11 +45,47 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
+    void getXfaDataReturnsBadRequestWhenFormatIsMissing() {
+        final var function = new HttpTriggerFunctions();
+        final var responseMocks = setupResponseMocks(Optional.of("dGVzdA=="), Map.of());
+
+        final var actualResponse = function.getXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Invalid format parameter: Must be 'json' or 'xml'.");
+    }
+
+    @Test
     void getXfaSchemaReturnsBadRequestWhenBodyMissing() {
         final var function = new HttpTriggerFunctions();
         final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of());
 
         final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("No content supplied in body.");
+    }
+
+    @Test
+    void getXfaSchemaReturnsBadRequestWhenBodyIsNotBase64() {
+        final var function = new HttpTriggerFunctions();
+        final var responseMocks = setupResponseMocks(Optional.of("not base64"), Map.of());
+
+        final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Invalid argument in request.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenBodyMissing() {
+        final var function = new HttpTriggerFunctions();
+        final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
@@ -69,6 +105,71 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
+    void fillXfaDataReturnsBadRequestWhenValidateOnlyIsTrueAndTemplateIsInvalidPdf() {
+        final var function = new HttpTriggerFunctions();
+        final var requestBody = "{\"templateBase64\":\"dGVzdA==\",\"formData\":{\"data\":{}},\"validateOnly\":true}";
+        final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Invalid XFA form.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenValidateOnlyIsTrueAndTemplateBase64IsNotDecodable() {
+        final var function = new HttpTriggerFunctions();
+        final var requestBody = "{\"templateBase64\":\"!!!!\",\"formData\":{\"data\":{}},\"validateOnly\":true}";
+        final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Invalid argument in request.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenTemplateBase64IsNotString() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":123,\"formData\":{\"data\":{}}}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'templateBase64' must be a non-empty string.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenFormDataIsNotObject() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":\"dGVzdA==\",\"formData\":\"not-an-object\"}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'formData' must be a JSON object.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenFormDataDataIsNotObject() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":\"dGVzdA==\",\"formData\":{\"data\":\"x\"}}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
+    }
+
+    @Test
     void fillXfaDataReturnsBadRequestWhenFormDataContractIsInvalid() {
         final var function = new HttpTriggerFunctions();
         final var invalidPayload = "{\"templateBase64\":\"dGVzdA==\",\"formData\":{\"value\":\"x\"}}";
@@ -79,6 +180,20 @@ class HttpTriggerFunctionsTest {
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
         verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
+    }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenTemplateBase64IsBlank() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":\"   \",\"formData\":{\"data\":{}}}";
+
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'templateBase64' must be a non-empty string.");
     }
 
     @Test
@@ -93,6 +208,76 @@ class HttpTriggerFunctionsTest {
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
         verify(responseMocks.builder()).body("Invalid argument in request.");
     }
+
+    @Test
+    void fillXfaDataReturnsBadRequestWhenFormDataContainsUnexpectedKeys() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = "{\"templateBase64\":\"dGVzdA==\",\"formData\":{\"data\":{},\"extra\":{}}}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
+    }
+
+        @Test
+        void fillXfaDataReturnsBadRequestWhenPayloadModeIsInvalid() {
+                final var function = new HttpTriggerFunctions();
+                final var invalidPayload = """
+                                {
+                                    "templateBase64": "dGVzdA==",
+                                    "formData": {"data": {}},
+                                    "payloadMode": "unknown"
+                                }
+                                """;
+                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+                assertSame(responseMocks.response(), actualResponse);
+                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+                verify(responseMocks.builder()).body("Request field 'payloadMode' must be one of the following strings: partial, complete.");
+        }
+
+        @Test
+        void fillXfaDataReturnsBadRequestWhenWriteModeIsInvalid() {
+                final var function = new HttpTriggerFunctions();
+                final var invalidPayload = """
+                                {
+                                    "templateBase64": "dGVzdA==",
+                                    "formData": {"data": {}},
+                                    "writeMode": "mergeMaybe"
+                                }
+                                """;
+                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+                assertSame(responseMocks.response(), actualResponse);
+                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+                verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
+        }
+
+        @Test
+        void fillXfaDataReturnsBadRequestWhenValidateOnlyIsNotBoolean() {
+                final var function = new HttpTriggerFunctions();
+                final var invalidPayload = """
+                                {
+                                    "templateBase64": "dGVzdA==",
+                                    "formData": {"data": {}},
+                                    "validateOnly": "yes"
+                                }
+                                """;
+                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+
+                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+                assertSame(responseMocks.response(), actualResponse);
+                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+                verify(responseMocks.builder()).body("Request field 'validateOnly' must be a boolean.");
+        }
 
     private static ResponseMocks setupResponseMocks(
             final Optional<String> body,
