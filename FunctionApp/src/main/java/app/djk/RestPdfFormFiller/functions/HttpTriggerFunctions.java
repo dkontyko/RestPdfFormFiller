@@ -6,11 +6,11 @@ import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
+import app.djk.RestPdfFormFiller.projectExceptions.SafeToReturnIllegalArgumentException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
-import com.microsoft.kiota.ApiException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeType;
@@ -119,6 +119,9 @@ public class HttpTriggerFunctions {
 
     /**
      * This abstracts all the error handling to a single method, to avoid duplication of the catch blocks.
+     * <p>
+     * Error messages from {@link SafeToReturnIllegalArgumentException} are returned to callers as-is.
+     * Other {@link IllegalArgumentException} messages are replaced with a generic response.
      *
      * @param request  HTTP request from the caller.
      * @param context  ExecutionContext from the caller.
@@ -143,12 +146,12 @@ public class HttpTriggerFunctions {
         } catch (InvalidSessionIdException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid session ID.", e);
+        } catch (SafeToReturnIllegalArgumentException e) {
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    e.getMessage(), e);
         }
         // Dependency and built-in exceptions
-        catch (ApiException e) {
-            return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
-                    "Could not retrieve file.", e);
-        } catch (NumberFormatException e) {
+        catch (NumberFormatException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
                     "Invalid integer argument in request.", e);
         } catch (IllegalArgumentException e) {
@@ -186,6 +189,7 @@ public class HttpTriggerFunctions {
      *
      * @param requestBody Raw HTTP request body content.
      * @return Parsed fill request payload.
+     * @throws SafeToReturnIllegalArgumentException If the payload is not valid for this endpoint's contract.
      */
     private static FillRequest parseFillRequest(final String requestBody) {
         final var rootNode = parseRequestBodyAsJson(requestBody);
@@ -193,16 +197,16 @@ public class HttpTriggerFunctions {
         final var templateNode = rootNode.path("templateBase64");
         final var templateBase64 = templateNode.stringValue();
         if (templateNode.getNodeType() != JsonNodeType.STRING || templateBase64 == null || templateBase64.isBlank()) {
-            throw new IllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
+            throw new SafeToReturnIllegalArgumentException("Request field 'templateBase64' must be a non-empty string.");
         }
 
         final var formDataNode = rootNode.path("formData");
         if (!formDataNode.isObject()) {
-            throw new IllegalArgumentException("Request field 'formData' must be a JSON object.");
+            throw new SafeToReturnIllegalArgumentException("Request field 'formData' must be a JSON object.");
         }
 
         if (!formDataNode.has("data") || formDataNode.size() != 1 || !formDataNode.path("data").isObject()) {
-            throw new IllegalArgumentException("Request field 'formData' must contain only a 'data' object.");
+            throw new SafeToReturnIllegalArgumentException("Request field 'formData' must contain only a 'data' object.");
         }
 
         final var payloadMode = parsePayloadMode(rootNode.path("payloadMode"));
@@ -253,16 +257,17 @@ public class HttpTriggerFunctions {
 
     /**
      * Parses the request body into a JSON node and translates parsing failures into a caller-facing
-     * <code>IllegalArgumentException</code>.
+     * <code>SafeToReturnIllegalArgumentException</code>.
      *
      * @param requestBody Raw HTTP request body content.
      * @return Parsed JSON root node.
+     * @throws SafeToReturnIllegalArgumentException If parsing fails.
      */
     private static JsonNode parseRequestBodyAsJson(final String requestBody) {
         try {
             return OBJECT_MAPPER.readTree(requestBody);
         } catch (RuntimeException e) {
-            throw new IllegalArgumentException("Request body must be valid JSON.", e);
+            throw new SafeToReturnIllegalArgumentException("Request body must be valid JSON.", e);
         }
     }
 

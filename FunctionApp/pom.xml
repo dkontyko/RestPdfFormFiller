@@ -13,8 +13,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>25</java.version>
-        <functionAppName>RestPdfFormFiller-1654224697708</functionAppName>
-        <netty.version>4.1.133.Final</netty.version>
+        <functionAppName>RestPdfFormFiller</functionAppName>
+        <netty.version>4.1.135.Final</netty.version>
         <tools.jackson.version>3.2.0</tools.jackson.version>
         <com.fasterxml.jackson.core.version>2.22.0</com.fasterxml.jackson.core.version>
         <bouncycastle.version>1.84</bouncycastle.version>
@@ -155,37 +155,10 @@
                 <artifactId>azure-functions-maven-plugin</artifactId>
                 <version>1.40.0</version>
                 <configuration>
-                    <!-- function app name -->
+                    <!-- Names the local staging folder target/azure-functions/<appName>, which the
+                         GitHub Actions deploy (respect-pom-xml) reads. Deploy targeting itself comes
+                         from the workflow app-name/slot-name, not from this pom. -->
                     <appName>${functionAppName}</appName>
-                    <!-- function app resource group -->
-                    <resourceGroup>java-functions-group</resourceGroup>
-                    <!-- function app service plan name -->
-                    <appServicePlanName>java-functions-app-service-plan</appServicePlanName>
-                    <!-- function app region-->
-                    <!-- refers https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details#supported-regions for all valid values -->
-                    <region>westus</region>
-                    <!-- function pricingTier, default to be consumption if not specified -->
-                    <!-- refers https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details#supported-pricing-tiers for all valid values -->
-                    <!-- <pricingTier></pricingTier> -->
-
-                    <!-- Whether to disable application insights, default is false -->
-                    <!-- refers https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details for all valid configurations for application insights-->
-                    <!-- <disableAppInsights></disableAppInsights> -->
-                    <runtime>
-                        <!-- runtime os, could be windows, linux or docker-->
-                        <os>windows</os>
-                        <javaVersion>${java.version}</javaVersion>
-                        <!-- for docker function, please set the following parameters -->
-                        <!-- <image>[hub-user/]repo-name[:tag]</image> -->
-                        <!-- <serverId></serverId> -->
-                        <!-- <registryUrl></registryUrl>  -->
-                    </runtime>
-                    <appSettings>
-                        <property>
-                            <name>FUNCTIONS_EXTENSION_VERSION</name>
-                            <value>~4</value>
-                        </property>
-                    </appSettings>
                 </configuration>
                 <executions>
                     <execution>
