@@ -39,7 +39,7 @@ jobs:
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@bc63708cc6539760eea18d8a7de4ce8ef5fdf593 # v1.5.6
-        id: fa
+        id: deploy-to-function-app
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           slot-name: ${{ env.AZURE_FUNCTIONAPP_SLOT_NAME }}
