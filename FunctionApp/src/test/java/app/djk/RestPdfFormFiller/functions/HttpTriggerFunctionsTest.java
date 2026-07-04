@@ -238,7 +238,7 @@ class HttpTriggerFunctionsTest {
 
                 assertSame(responseMocks.response(), actualResponse);
                 verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Invalid argument in request.");
+                verify(responseMocks.builder()).body("Request field 'payloadMode' must be one of the following strings: partial, complete.");
         }
 
         @Test
@@ -257,7 +257,7 @@ class HttpTriggerFunctionsTest {
 
                 assertSame(responseMocks.response(), actualResponse);
                 verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Invalid argument in request.");
+                verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
         }
 
         @Test
@@ -276,7 +276,7 @@ class HttpTriggerFunctionsTest {
 
                 assertSame(responseMocks.response(), actualResponse);
                 verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Invalid argument in request.");
+                verify(responseMocks.builder()).body("Request field 'validateOnly' must be a boolean.");
         }
 
     private static ResponseMocks setupResponseMocks(

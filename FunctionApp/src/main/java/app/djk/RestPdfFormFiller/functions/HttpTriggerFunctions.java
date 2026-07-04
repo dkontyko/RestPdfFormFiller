@@ -231,12 +231,11 @@ public class HttpTriggerFunctions {
         if (payloadModeNode.isMissingNode() || payloadModeNode.isNull()) {
             return PayloadMode.PARTIAL;
         }
-        if (payloadModeNode.getNodeType() != JsonNodeType.STRING) {
-            throw new IllegalArgumentException("Request field 'payloadMode' must be a string.");
-        }
-        final var mode = PayloadMode.fromValue(payloadModeNode.stringValue());
+        final var mode = payloadModeNode.getNodeType() == JsonNodeType.STRING
+                ? PayloadMode.fromValue(payloadModeNode.stringValue()) : null;
         if (mode == null) {
-            throw new IllegalArgumentException("Request field 'payloadMode' must be one of: partial, complete.");
+            throw new SafeToReturnIllegalArgumentException(
+                    "Request field 'payloadMode' must be one of the following strings: partial, complete.");
         }
         return mode;
     }
@@ -245,13 +244,11 @@ public class HttpTriggerFunctions {
         if (writeModeNode.isMissingNode() || writeModeNode.isNull()) {
             return WriteMode.OVERWRITE;
         }
-        if (writeModeNode.getNodeType() != JsonNodeType.STRING) {
-            throw new IllegalArgumentException("Request field 'writeMode' must be a string.");
-        }
-        final var mode = WriteMode.fromValue(writeModeNode.stringValue());
+        final var mode = writeModeNode.getNodeType() == JsonNodeType.STRING
+                ? WriteMode.fromValue(writeModeNode.stringValue()) : null;
         if (mode == null) {
-            throw new IllegalArgumentException(
-                    "Request field 'writeMode' must be one of: overwrite, ifEmpty, failOnConflict.");
+            throw new SafeToReturnIllegalArgumentException(
+                    "Request field 'writeMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
         }
         return mode;
     }
@@ -261,7 +258,7 @@ public class HttpTriggerFunctions {
             return false;
         }
         if (!validateOnlyNode.isBoolean()) {
-            throw new IllegalArgumentException("Request field 'validateOnly' must be a boolean.");
+            throw new SafeToReturnIllegalArgumentException("Request field 'validateOnly' must be a boolean.");
         }
         return validateOnlyNode.booleanValue();
     }
