@@ -27,13 +27,16 @@ jobs:
         run: |
           python -c "import json; [json.load(open(f)) for f in ('CustomConnector/PdfFormFiller.swagger.json','CustomConnector/apiProperties.json','CustomConnector/apiProperties.schema.json')]; print('JSON OK')"
 
-      - name: Install validators (paconn + check-jsonschema)
-        run: pip install paconn check-jsonschema
+      - name: Install validators (openapi-spec-validator + check-jsonschema)
+        run: pip install openapi-spec-validator check-jsonschema
 
-      - name: Validate connector definition (paconn)
-        # `paconn validate` runs the same rule checks as the portal Swagger
-        # Validator. It needs no environment or login, so it is safe on PRs.
-        run: paconn validate --api-def CustomConnector/PdfFormFiller.swagger.json
+      - name: Validate the OpenAPI (Swagger 2.0) definition
+        # openapi-spec-validator checks the swagger against the OpenAPI 2.0 spec
+        # (structure + resolvable $refs) fully offline. NOTE: paconn validate was
+        # removed because it calls a Power Platform service that requires an
+        # interactive login (no service-principal support), so it cannot run in
+        # CI. Connector-specific rule violations surface at deploy time via pac.
+        run: openapi-spec-validator CustomConnector/PdfFormFiller.swagger.json
 
       - name: Validate apiProperties against schema
         run: check-jsonschema --schemafile CustomConnector/apiProperties.schema.json CustomConnector/apiProperties.json
