@@ -62,10 +62,90 @@
                 ]
               },
               "uiDefinition": {
-                "type": "object"
+                "$ref": "#/definitions/ConnectionParameter-uiDefinition"
               },
               "oAuthSettings": {
                 "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ConnectionParameter-uiDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tooltip": {
+          "type": "string"
+        },
+        "tabIndex": {
+          "type": "integer"
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "clearText": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "string"
+            },
+            "tabIndex": {
+              "type": "integer"
+            },
+            "capability": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hidden": {
+              "type": "string"
+            },
+            "allowedValues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "dependencies": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "values"
+                ],
+                "properties": {
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
