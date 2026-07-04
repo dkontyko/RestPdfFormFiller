@@ -2,11 +2,13 @@ package app.djk.RestPdfFormFiller.functions;
 
 import app.djk.RestPdfFormFiller.Pdf.DataFormatter;
 import app.djk.RestPdfFormFiller.Pdf.RestPdfApi;
+import app.djk.RestPdfFormFiller.Pdf.WriteMode;
 import app.djk.RestPdfFormFiller.projectExceptions.EmptyRequestBodyException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidReturnDataFormatException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidSessionIdException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import app.djk.RestPdfFormFiller.projectExceptions.SafeToReturnIllegalArgumentException;
+import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
@@ -15,7 +17,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeType;
 
-import java.io.ByteArrayInputStream;
 import java.util.*;
 import java.util.logging.Level;
 
@@ -115,9 +116,8 @@ public class HttpTriggerFunctions {
                 return request.createResponseBuilder(HttpStatus.OK).body("Validation succeeded.").build();
             }
 
-            final var templateStream = new ByteArrayInputStream(templateBytes);
-
-            final var filledPdfBytes = RestPdfApi.fillXfaForm(templateStream, fillRequest.formDataJson());
+            final var filledPdfBytes = RestPdfApi.fillXfaForm(
+                    templateBytes, fillRequest.formDataJson(), fillRequest.writeMode());
             final var base64EncodedForm = Base64.getEncoder().encodeToString(filledPdfBytes);
 
             return request.createResponseBuilder(HttpStatus.OK).body(base64EncodedForm).build();
@@ -156,6 +156,9 @@ public class HttpTriggerFunctions {
                     "Invalid session ID.", e);
         } catch (SafeToReturnIllegalArgumentException e) {
             return logAndRespond(request, context, Level.WARNING, HttpStatus.BAD_REQUEST,
+                    e.getMessage(), e);
+        } catch (WriteConflictException e) {
+            return logAndRespond(request, context, Level.WARNING, HttpStatus.CONFLICT,
                     e.getMessage(), e);
         }
         // Dependency and built-in exceptions
@@ -325,39 +328,6 @@ public class HttpTriggerFunctions {
         }
 
         static PayloadMode fromValue(final String value) {
-            for (final var mode : values()) {
-                if (mode.value.equals(value)) {
-                    return mode;
-                }
-            }
-            return null;
-        }
-    }
-
-    /**
-     * Write conflict mode for <code>FillXfaData</code>.
-     */
-    private enum WriteMode {
-        /**
-         * Provided values replace existing target values.
-         */
-        OVERWRITE("overwrite"),
-        /**
-         * Provided values are applied only when the existing target value is empty.
-         */
-        IF_EMPTY("ifEmpty"),
-        /**
-         * Provided values that conflict with non-empty existing target values should be rejected.
-         */
-        FAIL_ON_CONFLICT("failOnConflict");
-
-        private final String value;
-
-        WriteMode(final String value) {
-            this.value = value;
-        }
-
-        static WriteMode fromValue(final String value) {
             for (final var mode : values()) {
                 if (mode.value.equals(value)) {
                     return mode;

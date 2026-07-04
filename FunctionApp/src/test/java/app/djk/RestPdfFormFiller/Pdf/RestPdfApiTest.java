@@ -2,6 +2,7 @@ package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormDataException;
+import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
 import org.junit.jupiter.api.Test;
 import org.openpdf.text.Document;
 import org.openpdf.text.Paragraph;
@@ -11,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,6 +53,75 @@ class RestPdfApiTest {
 
         assertThrows(InvalidXfaFormDataException.class,
                 () -> RestPdfApi.fillXfaForm(samplePdfBytes, invalidJsonFormData));
+    }
+
+    @Test
+    void fillXfaFormOverwriteReplacesExistingAndPreservesUntouchedFields() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"},"
+                + "\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.OVERWRITE);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Provided value replaced the existing one.
+        assertTrue(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        assertFalse(resultXml.contains("<SSN>123-45-6789</SSN>"));
+        // Previously empty target was filled.
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+        // A field not present in the request kept its existing value.
+        assertTrue(resultXml.contains("<EFFECITIVE>9988</EFFECITIVE>"));
+    }
+
+    @Test
+    void fillXfaFormIfEmptyOnlyWritesIntoEmptyTargets() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"},"
+                + "\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.IF_EMPTY);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        // Non-empty existing target was left unchanged.
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+        assertFalse(resultXml.contains("<SSN>999-99-9999</SSN>"));
+        // Empty target was filled.
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+    }
+
+    @Test
+    void fillXfaFormFailOnConflictThrowsWhenValueDiffersFromNonEmptyTarget() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        final var conflict = assertThrows(WriteConflictException.class,
+                () -> RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.FAIL_ON_CONFLICT));
+        assertEquals("Write conflict at field 'form1/Page1/SSN': target already has a different value.",
+                conflict.getMessage());
+    }
+
+    @Test
+    void fillXfaFormFailOnConflictSucceedsWhenTargetIsEmpty() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page2\":{\"ORG_C\":\"NEWORG\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.FAIL_ON_CONFLICT);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
+        // Unrelated non-empty field is preserved.
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
+    }
+
+    @Test
+    void fillXfaFormFailOnConflictSucceedsWhenValueMatchesExisting() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"123-45-6789\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(samplePdfBytes, formData, WriteMode.FAIL_ON_CONFLICT);
+        final var resultXml = RestPdfApi.getXfaDatasetNodeAsString(filledBytes);
+
+        assertTrue(resultXml.contains("<SSN>123-45-6789</SSN>"));
     }
 
     private static byte[] readSampleDa4187Pdf() throws Exception {

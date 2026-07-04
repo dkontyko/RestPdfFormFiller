@@ -7,6 +7,9 @@ import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.azure.functions.HttpStatusType;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
@@ -278,6 +281,53 @@ class HttpTriggerFunctionsTest {
                 verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
                 verify(responseMocks.builder()).body("Request field 'validateOnly' must be a boolean.");
         }
+
+    @Test
+    void fillXfaDataReturnsConflictWhenWriteModeFailOnConflictAndValueDiffers() throws Exception {
+        final var function = new HttpTriggerFunctions();
+        final var templateBase64 = Base64.getEncoder().encodeToString(readSampleDa4187Pdf());
+        final var requestBody = "{\"templateBase64\":\"" + templateBase64 + "\","
+                + "\"formData\":{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}},"
+                + "\"writeMode\":\"failOnConflict\"}";
+        final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.CONFLICT);
+        verify(responseMocks.builder())
+                .body("Write conflict at field 'form1/Page1/SSN': target already has a different value.");
+    }
+
+    @Test
+    void fillXfaDataReturnsOkWhenWriteModeOverwriteSucceeds() throws Exception {
+        final var function = new HttpTriggerFunctions();
+        final var templateBase64 = Base64.getEncoder().encodeToString(readSampleDa4187Pdf());
+        final var requestBody = "{\"templateBase64\":\"" + templateBase64 + "\","
+                + "\"formData\":{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}},"
+                + "\"writeMode\":\"overwrite\"}";
+        final var responseMocks = setupResponseMocks(Optional.of(requestBody), Map.of());
+
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.OK);
+    }
+
+    private static byte[] readSampleDa4187Pdf() throws Exception {
+        final var moduleRoot = Path.of("").toAbsolutePath();
+        final var sampleInRepoRoot = moduleRoot.resolve("../resources/DA4187/A4187.pdf").normalize();
+        final var sampleInModule = moduleRoot.resolve("resources/DA4187/A4187.pdf").normalize();
+
+        if (Files.exists(sampleInRepoRoot)) {
+            return Files.readAllBytes(sampleInRepoRoot);
+        }
+        if (Files.exists(sampleInModule)) {
+            return Files.readAllBytes(sampleInModule);
+        }
+
+        throw new IllegalStateException("Could not locate sample file A4187.pdf for tests.");
+    }
 
     private static ResponseMocks setupResponseMocks(
             final Optional<String> body,
