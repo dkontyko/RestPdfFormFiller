@@ -45,6 +45,18 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
+    void getXfaSchemaReturnsBadRequestWhenBodyMissing() {
+        final var function = new HttpTriggerFunctions();
+        final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of());
+
+        final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
+
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("No content supplied in body.");
+    }
+
+    @Test
     void fillXfaDataReturnsBadRequestWhenRequestBodyIsNotJson() {
         final var function = new HttpTriggerFunctions();
         final var responseMocks = setupResponseMocks(Optional.of("this is not json"), Map.of());
@@ -53,7 +65,7 @@ class HttpTriggerFunctionsTest {
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
+        verify(responseMocks.builder()).body("Request body must be valid JSON.");
     }
 
     @Test
@@ -66,15 +78,16 @@ class HttpTriggerFunctionsTest {
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
+        verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
     }
 
     @Test
-    void authNTestReturnsBadRequestWhenAuthorizationHeaderMissing() {
+    void fillXfaDataReturnsGenericMessageForNonAllowlistedIllegalArgumentException() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.of("ignored"), Map.of());
+        final var invalidPayload = "{\"templateBase64\":\"!!!!\",\"formData\":{\"data\":{}}}";
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
-        final var actualResponse = function.authNTest(responseMocks.request(), responseMocks.context());
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
