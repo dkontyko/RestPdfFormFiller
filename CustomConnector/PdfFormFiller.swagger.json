@@ -2,8 +2,8 @@
     "swagger": "2.0",
     "info": {
       "title": "PdfFormFiller",
-      "description": "Allows filling and retrieving data from selected forms. (DEV VERSION)",
-      "version": "0.4"
+      "description": "Fills and reads data from XFA PDF forms. Files are exchanged as raw binary so SharePoint/OneDrive file content can be used directly in Power Automate. (DEV VERSION)",
+      "version": "0.5"
     },
     "host": "restpdfformfiller-dev.azurewebsites.net",
     "basePath": "/api/",
@@ -11,36 +11,37 @@
       "https"
     ],
     "consumes": [
-      "text/plain",
-      "application/json"
+      "application/json",
+      "application/octet-stream"
     ],
     "produces": [
       "application/json",
-      "application/xml"
+      "application/xml",
+      "application/pdf"
     ],
     "paths": {
       "/GetXfaData": {
         "post": {
           "responses": {
-            "400": {
-              "description": "Bad request."
-            },
-            "default": {
-              "description": "default",
+            "200": {
+              "description": "The XFA form data in the requested format.",
               "schema": {
                 "title": "formData",
                 "type": "string"
               }
+            },
+            "400": {
+              "description": "Bad request (missing/invalid format, empty body, or the file is not a valid PDF)."
             }
           },
           "summary": "Get XFA Form Data",
           "description": "Gets the data from the given XFA form.",
           "consumes": [
-            "text/plain"
+            "application/octet-stream"
           ],
           "produces": [
-            "application/xml",
-            "application/json"
+            "application/json",
+            "application/xml"
           ],
           "operationId": "GetXfaData",
           "parameters": [
@@ -59,15 +60,17 @@
               "name": "x-functions-key",
               "required": true,
               "in": "header",
-              "type": "string"
+              "type": "string",
+              "description": "Azure Functions key (interim auth while OAuth is being validated)."
             },
             {
-              "name": "pdfContentBase64",
-              "description": "File content in base64 (use body/$content from SharePoint Get file action)",
+              "name": "pdfContent",
+              "description": "Raw PDF file content (pass File Content from a SharePoint/OneDrive 'Get file content' action directly).",
               "in": "body",
               "required": true,
               "schema": {
-                "type": "string"
+                "type": "string",
+                "format": "binary"
               }
             }
           ]
@@ -76,19 +79,23 @@
       "/FillXfaData": {
         "post": {
           "responses": {
-            "400": {
-              "description": "Bad request."
-            },
-            "default": {
-              "description": "default",
+            "200": {
+              "description": "The filled PDF file.",
               "schema": {
-                "title": "formData",
-                "type": "string"
+                "title": "filledPdf",
+                "type": "string",
+                "format": "binary"
               }
+            },
+            "400": {
+              "description": "Bad request (invalid JSON, contract violation, or the template is not a valid XFA form)."
+            },
+            "409": {
+              "description": "Write conflict (patchMode 'failOnConflict' and a provided value would overwrite a different existing value)."
             }
           },
           "summary": "Fill XFA Form Data",
-          "description": "Fills the specified data into the given PDF/XFAF form.",
+          "description": "Fills the specified data into the given XFA PDF form and returns the filled PDF as a file.",
           "consumes": [
             "application/json"
           ],
@@ -98,31 +105,62 @@
           "operationId": "FillXfaData",
           "parameters": [
             {
-              "name": "pdfContentBase64",
-              "in": "header",
-              "type": "string",
-              "format": "bytes"
-            },
-            {
               "name": "x-functions-key",
               "required": true,
               "in": "header",
-              "type": "string"
+              "type": "string",
+              "description": "Azure Functions key (interim auth while OAuth is being validated)."
             },
             {
-              "name": "fillXfaBodyData",
+              "name": "fillRequest",
               "in": "body",
               "required": true,
               "schema": {
-                "x-ms-dynamic-schema": {
-                  "operationId": "GetXfaFormSchema",
-                  "parameters": {
-                    "pdfFormData": {
-                      "parameter": "pdfContentBase64"
-                    },
-                    "x-functions-key": {
-                      "parameter": "x-functions-key"
+                "type": "object",
+                "required": [
+                  "templateBase64",
+                  "formData"
+                ],
+                "properties": {
+                  "templateBase64": {
+                    "type": "string",
+                    "format": "byte",
+                    "description": "Source PDF. Pass File Content from a 'Get file content' action; Power Automate encodes it automatically."
+                  },
+                  "formData": {
+                    "type": "object",
+                    "required": [
+                      "data"
+                    ],
+                    "properties": {
+                      "data": {
+                        "type": "object",
+                        "description": "The XFA datasets 'data' object (e.g. { \"form1\": { \"Page1\": { \"SSN\": \"...\" } } })."
+                      }
                     }
+                  },
+                  "writeMode": {
+                    "type": "string",
+                    "default": "patch",
+                    "enum": [
+                      "patch",
+                      "put"
+                    ],
+                    "description": "patch merges into the existing form (omitted fields kept); put replaces the whole form (omitted fields cleared)."
+                  },
+                  "patchMode": {
+                    "type": "string",
+                    "enum": [
+                      "overwrite",
+                      "ifEmpty",
+                      "failOnConflict"
+                    ],
+                    "description": "Collision policy for provided fields under writeMode 'patch'. Invalid when writeMode is 'put'."
+                  },
+                  "validateOnly": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, validate the request and return success/failure without producing a filled document."
                   }
                 }
               }
@@ -133,45 +171,41 @@
       "/GetXfaSchema": {
         "post": {
           "responses": {
-            "400": {
-              "description": "Bad request."
-            },
-            "default": {
-              "description": "default",
+            "200": {
+              "description": "JSON schema of the datasets in the given PDF.",
               "schema": {
                 "title": "formSchema",
                 "type": "string"
               }
+            },
+            "400": {
+              "description": "Bad request (empty body or the file is not a valid PDF)."
             }
           },
           "summary": "Get XFA Form Schema",
-          "description": "Gets JSON schema of datasets from given PDF document.",
+          "description": "Gets the JSON schema of datasets from the given PDF document.",
           "consumes": [
-            "text/plain"
+            "application/octet-stream"
           ],
           "produces": [
             "application/json"
           ],
           "parameters": [
             {
-              "name": "x-session-id",
-              "in": "header",
-              "type": "string",
-              "required": false
-            },
-            {
               "name": "x-functions-key",
               "required": true,
               "in": "header",
-              "type": "string"
+              "type": "string",
+              "description": "Azure Functions key (interim auth while OAuth is being validated)."
             },
             {
-              "name": "pdfFormData",
+              "name": "pdfContent",
+              "description": "Raw PDF file content (pass File Content from a SharePoint/OneDrive 'Get file content' action directly).",
               "in": "body",
-              "required": false,
+              "required": true,
               "schema": {
                 "type": "string",
-                "format": "bytes"
+                "format": "binary"
               }
             }
           ],
