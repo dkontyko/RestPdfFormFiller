@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Minimal apiProperties.json schema for CI validation. A pragmatic subset of the official paconn-apiProperties schema (https://raw.githubusercontent.com/microsoft/PowerPlatformConnectors/dev/schemas/paconn-apiProperties.schema.json), which cannot be consumed directly because it is JSONC (contains comments).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "properties"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "properties": {
+      "type": "object",
+      "required": [
+        "iconBrandColor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "iconBrandColor": {
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "stackOwner": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policyTemplateInstances": {
+          "type": "array"
+        },
+        "connectionParameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "securestring",
+                  "int",
+                  "bool",
+                  "oauthSetting",
+                  "gatewaySetting"
+                ]
+              },
+              "uiDefinition": {
+                "type": "object"
+              },
+              "oAuthSettings": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
