@@ -7,6 +7,7 @@ import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.azure.functions.HttpStatusType;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -26,7 +27,7 @@ class HttpTriggerFunctionsTest {
     @Test
     void getXfaDataReturnsBadRequestWhenBodyMissing() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of("format", "json"));
+        final var responseMocks = setupResponseMocks(Optional.<byte[]>empty(), Map.of("format", "json"));
 
         final var actualResponse = function.getXfaData(responseMocks.request(), responseMocks.context());
 
@@ -38,7 +39,7 @@ class HttpTriggerFunctionsTest {
     @Test
     void getXfaDataReturnsBadRequestWhenFormatIsInvalid() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.of("dGVzdA=="), Map.of("format", "yaml"));
+        final var responseMocks = setupResponseMocks(Optional.of(new byte[]{1, 2, 3}), Map.of("format", "yaml"));
 
         final var actualResponse = function.getXfaData(responseMocks.request(), responseMocks.context());
 
@@ -50,7 +51,7 @@ class HttpTriggerFunctionsTest {
     @Test
     void getXfaDataReturnsBadRequestWhenFormatIsMissing() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.of("dGVzdA=="), Map.of());
+        final var responseMocks = setupResponseMocks(Optional.of(new byte[]{1, 2, 3}), Map.of());
 
         final var actualResponse = function.getXfaData(responseMocks.request(), responseMocks.context());
 
@@ -62,7 +63,7 @@ class HttpTriggerFunctionsTest {
     @Test
     void getXfaSchemaReturnsBadRequestWhenBodyMissing() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.<String>empty(), Map.of());
+        final var responseMocks = setupResponseMocks(Optional.<byte[]>empty(), Map.of());
 
         final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
 
@@ -72,15 +73,16 @@ class HttpTriggerFunctionsTest {
     }
 
     @Test
-    void getXfaSchemaReturnsBadRequestWhenBodyIsNotBase64() {
+    void getXfaSchemaReturnsBadRequestWhenBodyIsNotValidPdf() {
         final var function = new HttpTriggerFunctions();
-        final var responseMocks = setupResponseMocks(Optional.of("not base64"), Map.of());
+        final var responseMocks = setupResponseMocks(
+                Optional.of("not a pdf".getBytes(StandardCharsets.UTF_8)), Map.of());
 
         final var actualResponse = function.getXfaSchema(responseMocks.request(), responseMocks.context());
 
         assertSame(responseMocks.response(), actualResponse);
         verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-        verify(responseMocks.builder()).body("Invalid argument in request.");
+        verify(responseMocks.builder()).body("Invalid or corrupted PDF file.");
     }
 
     @Test
@@ -225,82 +227,82 @@ class HttpTriggerFunctionsTest {
         verify(responseMocks.builder()).body("Request field 'formData' must contain only a 'data' object.");
     }
 
-        @Test
-        void fillXfaDataReturnsBadRequestWhenWriteModeIsInvalid() {
-                final var function = new HttpTriggerFunctions();
-                final var invalidPayload = """
-                                {
-                                    "templateBase64": "dGVzdA==",
-                                    "formData": {"data": {}},
-                                    "writeMode": "sideways"
-                                }
-                                """;
-                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+    @Test
+    void fillXfaDataReturnsBadRequestWhenWriteModeIsInvalid() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = """
+                {
+                    "templateBase64": "dGVzdA==",
+                    "formData": {"data": {}},
+                    "writeMode": "sideways"
+                }
+                """;
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
-                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
-                assertSame(responseMocks.response(), actualResponse);
-                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: patch, put.");
-        }
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'writeMode' must be one of the following strings: patch, put.");
+    }
 
-        @Test
-        void fillXfaDataReturnsBadRequestWhenPatchModeIsInvalid() {
-                final var function = new HttpTriggerFunctions();
-                final var invalidPayload = """
-                                {
-                                    "templateBase64": "dGVzdA==",
-                                    "formData": {"data": {}},
-                                    "patchMode": "mergeMaybe"
-                                }
-                                """;
-                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+    @Test
+    void fillXfaDataReturnsBadRequestWhenPatchModeIsInvalid() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = """
+                {
+                    "templateBase64": "dGVzdA==",
+                    "formData": {"data": {}},
+                    "patchMode": "mergeMaybe"
+                }
+                """;
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
-                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
-                assertSame(responseMocks.response(), actualResponse);
-                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'patchMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
-        }
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'patchMode' must be one of the following strings: overwrite, ifEmpty, failOnConflict.");
+    }
 
-        @Test
-        void fillXfaDataReturnsBadRequestWhenPatchModeSuppliedWithPut() {
-                final var function = new HttpTriggerFunctions();
-                final var invalidPayload = """
-                                {
-                                    "templateBase64": "dGVzdA==",
-                                    "formData": {"data": {}},
-                                    "writeMode": "put",
-                                    "patchMode": "ifEmpty"
-                                }
-                                """;
-                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+    @Test
+    void fillXfaDataReturnsBadRequestWhenPatchModeSuppliedWithPut() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = """
+                {
+                    "templateBase64": "dGVzdA==",
+                    "formData": {"data": {}},
+                    "writeMode": "put",
+                    "patchMode": "ifEmpty"
+                }
+                """;
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
-                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
-                assertSame(responseMocks.response(), actualResponse);
-                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'patchMode' is only valid when 'writeMode' is 'patch'.");
-        }
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'patchMode' is only valid when 'writeMode' is 'patch'.");
+    }
 
-        @Test
-        void fillXfaDataReturnsBadRequestWhenValidateOnlyIsNotBoolean() {
-                final var function = new HttpTriggerFunctions();
-                final var invalidPayload = """
-                                {
-                                    "templateBase64": "dGVzdA==",
-                                    "formData": {"data": {}},
-                                    "validateOnly": "yes"
-                                }
-                                """;
-                final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
+    @Test
+    void fillXfaDataReturnsBadRequestWhenValidateOnlyIsNotBoolean() {
+        final var function = new HttpTriggerFunctions();
+        final var invalidPayload = """
+                {
+                    "templateBase64": "dGVzdA==",
+                    "formData": {"data": {}},
+                    "validateOnly": "yes"
+                }
+                """;
+        final var responseMocks = setupResponseMocks(Optional.of(invalidPayload), Map.of());
 
-                final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
+        final var actualResponse = function.fillXfaData(responseMocks.request(), responseMocks.context());
 
-                assertSame(responseMocks.response(), actualResponse);
-                verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
-                verify(responseMocks.builder()).body("Request field 'validateOnly' must be a boolean.");
-        }
+        assertSame(responseMocks.response(), actualResponse);
+        verify(responseMocks.request()).createResponseBuilder(HttpStatus.BAD_REQUEST);
+        verify(responseMocks.builder()).body("Request field 'validateOnly' must be a boolean.");
+    }
 
     @Test
     void fillXfaDataReturnsConflictWhenPatchModeFailOnConflictAndValueDiffers() throws Exception {
@@ -349,12 +351,12 @@ class HttpTriggerFunctionsTest {
         throw new IllegalStateException("Could not locate sample file A4187.pdf for tests.");
     }
 
-    private static ResponseMocks setupResponseMocks(
-            final Optional<String> body,
+    private static <T> ResponseMocks<T> setupResponseMocks(
+            final Optional<T> body,
             final Map<String, String> queryParameters) {
 
         @SuppressWarnings("unchecked")
-        final var request = (HttpRequestMessage<Optional<String>>) mock(HttpRequestMessage.class);
+        final var request = (HttpRequestMessage<Optional<T>>) mock(HttpRequestMessage.class);
         final var context = mock(ExecutionContext.class);
         final var builder = mock(HttpResponseMessage.Builder.class);
         final var response = mock(HttpResponseMessage.class);
@@ -372,11 +374,11 @@ class HttpTriggerFunctionsTest {
         when(builder.status(any(HttpStatusType.class))).thenReturn(builder);
         when(builder.build()).thenReturn(response);
 
-        return new ResponseMocks(request, context, builder, response);
+        return new ResponseMocks<>(request, context, builder, response);
     }
 
-    private record ResponseMocks(
-            HttpRequestMessage<Optional<String>> request,
+    private record ResponseMocks<T>(
+            HttpRequestMessage<Optional<T>> request,
             ExecutionContext context,
             HttpResponseMessage.Builder builder,
             HttpResponseMessage response) {
