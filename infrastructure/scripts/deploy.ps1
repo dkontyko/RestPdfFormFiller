@@ -65,32 +65,66 @@ function Get-DesiredFederatedCredentialFromTemplate {
     # deployment would touch. Returns a hashtable of UAMI name -> array of
     # federated-credential names, kept in lock-step with identities.bicep
     # without duplicating the list here.
+    #
+    # The map is keyed by EVERY managed identity the template declares (parsed
+    # from the identity resource IDs), so an identity with zero template FICs
+    # still appears with an empty array and its stale FICs get pruned. Returns
+    # $null when resolution itself fails (validate error, or no identities
+    # parsed) so the caller can skip pruning rather than mistake a false-empty
+    # for "the template wants no FICs" and delete live credentials.
     $ids = az deployment group validate `
         --resource-group $ResourceGroup `
         --template-file $Template `
         --parameters $ParamFile `
         --query 'properties.validatedResources[].id' -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn 'Could not validate the template to resolve federated credentials (API error or insufficient permissions).'
+        return $null
+    }
     $map = @{}
     foreach ($id in @($ids | Where-Object { $_ })) {
+        # A federated-credential child: record it under its parent identity.
         if ($id -match '/userAssignedIdentities/(?<uami>[^/]+)/federatedIdentityCredentials/(?<fic>[^/]+)$') {
             $uami = $Matches['uami']
             if (-not $map.ContainsKey($uami)) { $map[$uami] = @() }
             $map[$uami] += $Matches['fic']
         }
+        # The managed identity resource itself: establishes the authoritative set
+        # of identities to reconcile, even those declaring zero FICs.
+        elseif ($id -match '/userAssignedIdentities/(?<uami>[^/]+)$') {
+            if (-not $map.ContainsKey($Matches['uami'])) { $map[$Matches['uami']] = @() }
+        }
     }
     if ($map.Count -eq 0) {
-        Write-Warn 'Could not resolve federated credentials from the template (validate returned none).'
+        # The template always declares the deploy identities; zero here means the
+        # resolution didn't work, not a genuinely empty template. Skip pruning.
+        Write-Warn 'Resolved no managed identities from the template; skipping FIC reconciliation to avoid deleting live credentials on a false-empty.'
+        return $null
     }
     return $map
 }
 
 function Sync-FederatedCredential {
+    # Returns $true if every identity reconciled cleanly, $false if any list or
+    # delete call failed (so the caller can decide whether to fail the run).
     param([hashtable]$Desired, [bool]$Prune)
-    if ($Desired.Count -eq 0) { Write-Warn 'No template FICs resolved; skipping reconciliation.'; return }
+    if (-not $Desired) { return $true } # resolution failed/skipped; already warned
+    $ok = $true
     foreach ($uami in $Desired.Keys) {
+        # An empty array here is authoritative: the template declares this
+        # identity but wants NO FICs, so every existing FIC is a prune target.
         $wanted = $Desired[$uami]
-        $actual = @(az identity federated-credential list --identity-name $uami `
-                -g $ResourceGroup --query '[].name' -o tsv 2>$null | Where-Object { $_ })
+        # Capture the list output and its exit code separately: a failed list
+        # (e.g. permission error) must not be mistaken for "no FICs", which
+        # would silently skip pruning stale credentials.
+        $listed = az identity federated-credential list --identity-name $uami `
+            -g $ResourceGroup --query '[].name' -o tsv 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Could not list federated credentials for '$uami' (API error or insufficient permissions); skipping its reconciliation."
+            $ok = $false
+            continue
+        }
+        $actual = @($listed | Where-Object { $_ })
         if (-not $actual) { continue }
         $extras = @($actual | Where-Object { $wanted -notcontains $_ })
         if (-not $extras) { Write-Log "FICs on '$uami' already match the template."; continue }
@@ -99,13 +133,14 @@ function Sync-FederatedCredential {
                 Write-Log "Pruning stale FIC '$fic' from '$uami'..."
                 az identity federated-credential delete --name $fic `
                     --identity-name $uami -g $ResourceGroup --yes | Out-Null
-                if ($LASTEXITCODE -ne 0) { Write-Warn "Failed to delete FIC '$fic' from '$uami'." }
+                if ($LASTEXITCODE -ne 0) { Write-Warn "Failed to delete FIC '$fic' from '$uami'."; $ok = $false }
             }
             else {
                 Write-Warn "Would prune stale FIC '$fic' from '$uami' (not in the template)."
             }
         }
     }
+    return $ok
 }
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) { Stop-WithError 'az CLI is required.' }
@@ -136,7 +171,9 @@ if (-not $Apply) {
     if ($LASTEXITCODE -ne 0) { Stop-WithError 'what-if failed.' }
     Write-Log 'Checking federated-credential drift (pruned on -Apply)...'
     $desiredFics = Get-DesiredFederatedCredentialFromTemplate
-    Sync-FederatedCredential -Desired $desiredFics -Prune:$false
+    # Preview only: a list failure is surfaced as a warning (above) but does not
+    # fail the read-only what-if.
+    $null = Sync-FederatedCredential -Desired $desiredFics -Prune:$false
     Write-Log 'what-if complete. Re-run with -Apply to deploy.'
     exit 0
 }
@@ -158,7 +195,14 @@ if ($LASTEXITCODE -ne 0) { Stop-WithError 'Deployment failed.' }
 # Prune any FICs not declared in the template (the new ones now exist).
 Write-Log 'Reconciling federated credentials to match the template...'
 $desiredFics = Get-DesiredFederatedCredentialFromTemplate
-Sync-FederatedCredential -Desired $desiredFics -Prune:$true
+$reconcileOk = Sync-FederatedCredential -Desired $desiredFics -Prune:$true
 
 Write-Log 'Deployment complete. Outputs:'
 az deployment group show -g $ResourceGroup --name $deployName --query properties.outputs -o jsonc
+
+# The deployment itself succeeded above; if the post-deploy FIC reconciliation
+# could not complete, fail loudly (non-zero exit) so a stale credential is not
+# left silently in place - but make clear the deployment did succeed.
+if (-not $reconcileOk) {
+    Stop-WithError 'Deployment succeeded, but federated-credential reconciliation was incomplete (see warnings above). Investigate identity permissions and re-run to prune stale credentials.'
+}
