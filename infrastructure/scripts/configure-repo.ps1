@@ -112,10 +112,22 @@ function Set-GhEnvironment {
 
     # Reconcile to exactly one 'main' policy: remove any other pre-existing
     # policies so the environment genuinely limits deployments to 'main'.
-    $existing = gh api "repos/$Repo/environments/$EnvName/deployment-branch-policies" 2>$null |
-        ConvertFrom-Json
+    $raw = gh api "repos/$Repo/environments/$EnvName/deployment-branch-policies" 2>$null
+    $policies = @()
+    if ($LASTEXITCODE -eq 0 -and $raw) {
+        try {
+            $existing = $raw | ConvertFrom-Json
+            if ($existing.PSObject.Properties.Name -contains 'branch_policies' -and $existing.branch_policies) {
+                $policies = @($existing.branch_policies)
+            }
+        } catch {
+            Write-Warn "Could not parse deployment branch policies for '$EnvName'; treating as none. ($_)"
+        }
+    } else {
+        Write-Warn "Could not list deployment branch policies for '$EnvName' (API error or insufficient permissions); treating as none."
+    }
     $hasMain = $false
-    foreach ($policy in $existing.branch_policies) {
+    foreach ($policy in $policies) {
         if ($policy.name -eq 'main' -and $policy.type -eq 'branch') {
             $hasMain = $true
         } else {
