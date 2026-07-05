@@ -4,7 +4,7 @@
 //
 //   - functionDeploy UAMI  -> Website Contributor on the Function App
 //     (so GitHub Actions can deploy code).
-//   - site + slot SAMI     -> Storage Blob Data Owner + Queue Data Contributor
+//   - site + slot SAMI     -> Storage Blob Data Contributor + Queue Data Contributor
 //     + Table Data Contributor on the storage account (keyless AzureWebJobsStorage).
 //   - site + slot SAMI     -> Monitoring Metrics Publisher on App Insights
 //     (Entra-authenticated telemetry ingestion).
@@ -33,7 +33,7 @@ param slotPrincipalId string
 
 // Built-in role definition IDs.
 var websiteContributor = 'de139f84-1756-47ae-9be6-808fbbe84772'
-var storageBlobDataOwner = 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+var storageBlobDataContributor = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var storageQueueDataContributor = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 var storageTableDataContributor = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 var monitoringMetricsPublisher = '3913510d-42f4-4e42-8a64-420c390055eb'
@@ -43,7 +43,7 @@ var runtimePrincipals = [
   slotPrincipalId
 ]
 var storageRoleIds = [
-  storageBlobDataOwner
+  storageBlobDataContributor
   storageQueueDataContributor
   storageTableDataContributor
 ]
