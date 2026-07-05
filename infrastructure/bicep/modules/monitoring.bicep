@@ -21,7 +21,7 @@ param workspaceName string
 @description('Application Insights component name.')
 param appInsightsName string
 
-@description('Retention in days for the workspace. App Insights tables inherit this.')
+@description('Retention in days for the Log Analytics workspace. Workspace-based App Insights inherits this; the component-level retention is not set.')
 @minValue(30)
 @maxValue(730)
 param retentionInDays int = 31
@@ -64,7 +64,11 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
     WorkspaceResourceId: workspace.id
     IngestionMode: 'LogAnalytics'
     DisableLocalAuth: enforceEntraOnlyIngestion
-    RetentionInDays: retentionInDays
+    // NOTE: RetentionInDays is intentionally omitted. For a workspace-based
+    // component it is ignored (retention is governed by the Log Analytics
+    // workspace above), and the component only accepts a fixed set of values
+    // (30, 60, 90, ...) — passing 31 fails with "Must use an allowed retention
+    // setting."
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
   }

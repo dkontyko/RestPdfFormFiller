@@ -178,18 +178,19 @@ resource slot 'Microsoft.Web/sites/slots@2023-12-01' = {
   }
 }
 
-// Mark the telemetry + content settings as slot-sticky so a swap does not move
-// them between production and the slot.
+// Mark the telemetry role name as slot-sticky so a swap keeps each slot's
+// Application Insights identity in place (production stays 'RestPdfFormFiller',
+// the slot stays 'RestPdfFormFiller-dev'). The other candidates don't belong here:
+//   - WEBSITE_CONTENTSHARE / WEBSITE_CONTENTAZUREFILECONNECTIONSTRING are
+//     platform-managed on Consumption and Azure rejects them as slot settings.
+//   - APPLICATIONINSIGHTS_CONNECTION_STRING / _AUTHENTICATION_STRING are
+//     identical across both slots, so stickiness would be a no-op.
 resource slotConfigNames 'Microsoft.Web/sites/config@2023-12-01' = {
   parent: functionApp
   name: 'slotConfigNames'
   properties: {
     appSettingNames: [
-      'APPLICATIONINSIGHTS_CONNECTION_STRING'
-      'APPLICATIONINSIGHTS_AUTHENTICATION_STRING'
       'APPLICATIONINSIGHTS_ROLE_NAME'
-      'WEBSITE_CONTENTSHARE'
-      'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
     ]
   }
 }
