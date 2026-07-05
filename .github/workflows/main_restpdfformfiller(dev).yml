@@ -17,6 +17,11 @@ env:
 jobs:
   deploy-and-submit-dependencies:
     runs-on: windows-latest
+    # Gates the deploy behind the azure-dev environment. This also sets the
+    # GitHub OIDC subject to repo:<repo>:environment:azure-dev, which must match
+    # the federated credential on the gh-restpdfformfiller-deploy identity
+    # (see infrastructure/bicep/modules/identities.bicep).
+    environment: azure-dev
     permissions:
       id-token: write
       contents: write

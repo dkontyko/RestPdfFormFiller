@@ -1,0 +1,3 @@
+# CODEOWNERS — default owner for the whole repository.
+# See https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+*       @dkontyko

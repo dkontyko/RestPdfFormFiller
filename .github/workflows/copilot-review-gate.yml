@@ -1,0 +1,67 @@
+# Copilot review gate
+#
+# Auto-merge-safe barrier: hold the PR until Copilot's review of the current
+# head commit has *finished*, so auto-merge cannot race ahead and merge before
+# Copilot has had a chance to leave feedback.
+#
+# How it works: this job publishes a single check ("copilot-review-complete").
+# It waits a short grace period for Copilot to pick up the PR, then waits while
+# Copilot is reviewing (or is expected to review) the current head commit:
+#   - its review check run is queued/in_progress, OR
+#   - it has an outstanding review request (a "review_requested" for Copilot
+#     that is newer than its most recent submitted review) and has not yet
+#     reviewed the current head.
+# Once Copilot finishes (whether or not it leaves comments) - or if it is not
+# reviewing this commit at all (e.g. a follow-up push it does not re-review) -
+# the job succeeds.
+#
+# The job never *fails*, it only delays. Require "copilot-review-complete" in the
+# branch ruleset so auto-merge waits for it. Any feedback Copilot leaves is then
+# enforced separately by the ruleset's "require conversation resolution" rule.
+#
+# Signal reliability (verified against this repo): the requested_reviewers REST
+# endpoint does NOT list Copilot (returns empty), so it is not used. The timeline
+# "review_requested" event (reviewer login "Copilot") and the check run
+# ("copilot-pull-request-reviewer") are both reliable and are what we key on.
+
+name: Copilot review gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read # checkout: fetch the gate script (sparse)
+  checks: read # read Copilot's review check run on the head commit
+  pull-requests: read # read PR reviews (/pulls/{n}/reviews)
+  issues: read # read the PR timeline (/issues/{n}/timeline) for review-request events
+
+concurrency:
+  group: copilot-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  copilot-review-complete:
+    name: copilot-review-complete
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the gate script only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # The runner starts empty, so the script must be fetched - but the
+          # gate only needs this one file (everything else is `gh api`), so pull
+          # just it with a shallow, non-cone sparse checkout.
+          sparse-checkout: .github/resources/copilot-review-gate.ps1
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Wait for any in-progress or pending Copilot review to finish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          .github/resources/copilot-review-gate.ps1
+          -Repo '${{ github.repository }}'
+          -Pr '${{ github.event.pull_request.number }}'
+          -HeadSha '${{ github.event.pull_request.head.sha }}'
