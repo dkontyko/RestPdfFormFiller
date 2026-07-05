@@ -133,6 +133,7 @@ if (-not $Apply) {
         --resource-group $ResourceGroup `
         --template-file $Template `
         --parameters $ParamFile
+    if ($LASTEXITCODE -ne 0) { Stop-WithError 'what-if failed.' }
     Write-Log 'Checking federated-credential drift (pruned on -Apply)...'
     $desiredFics = Get-DesiredFederatedCredentialFromTemplate
     Sync-FederatedCredential -Desired $desiredFics -Prune:$false
