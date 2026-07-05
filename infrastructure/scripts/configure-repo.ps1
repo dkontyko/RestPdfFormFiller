@@ -104,14 +104,29 @@ if (-not ($FunctionClientId -and $TenantId -and $SubscriptionId)) {
 function Set-GhEnvironment {
     param([string]$EnvName)
     Write-Log "Ensuring environment '$EnvName' (deployments limited to 'main')..."
-    if ($DryRun) { Write-DryRun "PUT repos/$Repo/environments/$EnvName + branch policy 'main'"; return }
+    if ($DryRun) { Write-DryRun "PUT repos/$Repo/environments/$EnvName + reconcile branch policies to 'main' only"; return }
     $body = @{
         deployment_branch_policy = @{ protected_branches = $false; custom_branch_policies = $true }
     } | ConvertTo-Json
     $body | gh api -X PUT "repos/$Repo/environments/$EnvName" --input - | Out-Null
-    # Idempotently add a 'main' branch policy (ignore 'already exists').
-    gh api -X POST "repos/$Repo/environments/$EnvName/deployment-branch-policies" `
-        -f 'name=main' -f 'type=branch' 2>$null | Out-Null
+
+    # Reconcile to exactly one 'main' policy: remove any other pre-existing
+    # policies so the environment genuinely limits deployments to 'main'.
+    $existing = gh api "repos/$Repo/environments/$EnvName/deployment-branch-policies" 2>$null |
+        ConvertFrom-Json
+    $hasMain = $false
+    foreach ($policy in $existing.branch_policies) {
+        if ($policy.name -eq 'main' -and $policy.type -eq 'branch') {
+            $hasMain = $true
+        } else {
+            Write-Log "  removing stray deployment branch policy '$($policy.name)'"
+            gh api -X DELETE "repos/$Repo/environments/$EnvName/deployment-branch-policies/$($policy.id)" 2>$null | Out-Null
+        }
+    }
+    if (-not $hasMain) {
+        gh api -X POST "repos/$Repo/environments/$EnvName/deployment-branch-policies" `
+            -f 'name=main' -f 'type=branch' 2>$null | Out-Null
+    }
 }
 
 function Set-GhEnvSecret {
