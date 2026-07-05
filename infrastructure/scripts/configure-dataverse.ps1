@@ -117,8 +117,12 @@ $bu = Invoke-Dv 'businessunits?$select=businessunitid&$filter=parentbusinessunit
 $buId = $bu.value[0].businessunitid
 if (-not $buId) { Stop-WithError 'Could not find the root business unit.' }
 
-$roleNameEncoded = $SecurityRole -replace ' ', '%20'
-$roleFilter = "name%20eq%20'$roleNameEncoded'%20and%20_businessunitid_value%20eq%20$buId"
+# Build the OData filter with the RAW role name (OData escapes single quotes by
+# doubling them), then URL-encode the entire expression. Encoding the spaces
+# inside the quoted literal (e.g. 'System%20Customizer') would search for a role
+# whose name literally contains '%20' and never match the real 'System Customizer'.
+$escapedRole = $SecurityRole -replace "'", "''"
+$roleFilter = [uri]::EscapeDataString("name eq '$escapedRole' and _businessunitid_value eq $buId")
 Write-Log "Looking up security role '$SecurityRole'..."
 $role = Invoke-Dv "roles?`$select=roleid&`$filter=$roleFilter"
 $roleId = $role.value[0].roleid
