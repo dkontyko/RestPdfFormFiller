@@ -141,7 +141,11 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
-    clientCertMode: 'Required'
+    // No client-certificate (mutual TLS) auth: callers use function keys.
+    // clientCertMode is intentionally omitted — it only takes effect when
+    // clientCertEnabled is true, so leaving certs disabled keeps normal
+    // function-key callers unaffected.
+    clientCertEnabled: false
     siteConfig: {
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
@@ -167,7 +171,8 @@ resource slot 'Microsoft.Web/sites/slots@2023-12-01' = {
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
-    clientCertMode: 'Required'
+    // No client-certificate (mutual TLS) auth: callers use function keys.
+    clientCertEnabled: false
     siteConfig: {
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
