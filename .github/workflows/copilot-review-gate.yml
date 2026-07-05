@@ -32,10 +32,10 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
-  contents: read
-  checks: read
-  pull-requests: read
-  issues: read
+  contents: read # checkout: fetch the gate script (sparse)
+  checks: read # read Copilot's review check run on the head commit
+  pull-requests: read # read PR reviews (/pulls/{n}/reviews)
+  issues: read # read the PR timeline (/issues/{n}/timeline) for review-request events
 
 concurrency:
   group: copilot-review-gate-${{ github.event.pull_request.number }}
