@@ -91,6 +91,14 @@ Check for drift at any time with `./deploy.ps1` (what-if).
   `repo:dkontyko/RestPdfFormFiller:environment:azure-dev`. The Bicep defines the
   matching federated credential. These must stay in sync or `azure/login` fails.
 
+- **Federated-credential reconciliation.** ARM/Bicep does not delete a FIC that
+  exists in Azure but is absent from the template (e.g. the old branch-based
+  `github-main` credential). `deploy.ps1` closes that gap: it resolves the
+  intended FICs directly from the template (via a lightweight
+  `az deployment group validate`, so it stays in sync with `identities.bicep`
+  automatically), reports out-of-template FICs during a what-if, and prunes them
+  on `-Apply`.
+
 ## App settings intentionally removed
 
 `functionApp.bicep` declares app settings authoritatively, which drops the
