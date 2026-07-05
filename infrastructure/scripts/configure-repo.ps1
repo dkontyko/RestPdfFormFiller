@@ -112,19 +112,21 @@ function Set-GhEnvironment {
 
     # Reconcile to exactly one 'main' policy: remove any other pre-existing
     # policies so the environment genuinely limits deployments to 'main'.
+    # A failed list is treated as a hard error: silently assuming "no policies"
+    # could skip pruning real stray policies and still report success, which is
+    # exactly the misleading-audit state this reconciliation is meant to prevent.
     $raw = gh api "repos/$Repo/environments/$EnvName/deployment-branch-policies" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $raw) {
+        Stop-WithError "Could not list deployment branch policies for '$EnvName' (API error or insufficient permissions). Aborting so the environment is not left in an unverified state."
+    }
+    try {
+        $existing = $raw | ConvertFrom-Json
+    } catch {
+        Stop-WithError "Could not parse deployment branch policies for '$EnvName': $_"
+    }
     $policies = @()
-    if ($LASTEXITCODE -eq 0 -and $raw) {
-        try {
-            $existing = $raw | ConvertFrom-Json
-            if ($existing.PSObject.Properties.Name -contains 'branch_policies' -and $existing.branch_policies) {
-                $policies = @($existing.branch_policies)
-            }
-        } catch {
-            Write-Warn "Could not parse deployment branch policies for '$EnvName'; treating as none. ($_)"
-        }
-    } else {
-        Write-Warn "Could not list deployment branch policies for '$EnvName' (API error or insufficient permissions); treating as none."
+    if ($existing.PSObject.Properties.Name -contains 'branch_policies' -and $existing.branch_policies) {
+        $policies = @($existing.branch_policies)
     }
     $hasMain = $false
     foreach ($policy in $policies) {
