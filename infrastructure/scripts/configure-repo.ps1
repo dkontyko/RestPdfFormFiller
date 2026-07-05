@@ -143,13 +143,19 @@ Set-GhEnvVar    $PpEnv 'PP_ENVIRONMENT_URL' $PpEnvironmentUrl
 if ($PpConnectorId) { Set-GhEnvVar $PpEnv 'PP_CONNECTOR_ID' $PpConnectorId }
 
 # --- Default-branch protection via a repository RULESET (modern API). ---------
-# This mirrors the live `main` ruleset. Status-check contexts are GitHub
-# check-run names (integration_id 15368 = the GitHub Actions app):
-#   build                         -> maven.yml  (job id `build`)
-#   copilot-pull-request-reviewer -> Copilot code review completion
+# Status-check contexts are GitHub check-run/commit-status names
+# (integration_id 15368 = the GitHub Actions app):
+#   build                    -> maven.yml  (job id `build`)
+#   copilot-review-complete  -> the copilot-review-gate.yml workflow. That job
+#     waits a short grace period for Copilot to start reviewing the head commit;
+#     if a review is in progress it blocks until Copilot finishes (regardless of
+#     whether comments are left), otherwise it passes immediately. It is used
+#     INSTEAD of requiring Copilot's own `copilot-pull-request-reviewer` check,
+#     which is not reliably re-posted on pushes and stalls auto-merge. This makes
+#     auto-merge wait for Copilot's (first-pass) review without deadlocking.
 # CodeQL is enforced via the `code_scanning` rule ("Require code scanning
-# results"), not as a status check. The `copilot_code_review` rule triggers the
-# Copilot review that the status check above then requires.
+# results"), not as a status check. The `copilot_code_review` rule requests the
+# Copilot review that the gate then waits on.
 $RulesetName = 'main'
 Write-Log "Configuring branch ruleset '$RulesetName' on the default branch..."
 $ruleset = @{
@@ -176,7 +182,7 @@ $ruleset = @{
                 strict_required_status_checks_policy = $false
                 required_status_checks               = @(
                     @{ context = 'build'; integration_id = 15368 }
-                    @{ context = 'copilot-pull-request-reviewer'; integration_id = 15368 }
+                    @{ context = 'copilot-review-complete'; integration_id = 15368 }
                 )
             }
         }

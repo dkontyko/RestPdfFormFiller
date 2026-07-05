@@ -1,0 +1,145 @@
+# Copilot review gate
+#
+# Auto-merge-safe barrier: hold the PR until Copilot's review of the current
+# head commit has *finished*, so auto-merge cannot race ahead and merge before
+# Copilot has had a chance to leave feedback.
+#
+# How it works: this job publishes a single check ("copilot-review-complete").
+# It waits a short grace period for Copilot to pick up the PR, then waits while
+# Copilot is reviewing (or is expected to review) the current head commit:
+#   - its review check run is queued/in_progress, OR
+#   - it has an outstanding review request (a "review_requested" for Copilot
+#     that is newer than its most recent submitted review) and has not yet
+#     reviewed the current head.
+# Once Copilot finishes (whether or not it leaves comments) - or if it is not
+# reviewing this commit at all (e.g. a follow-up push it does not re-review) -
+# the job succeeds.
+#
+# The job never *fails*, it only delays. Require "copilot-review-complete" in the
+# branch ruleset so auto-merge waits for it. Any feedback Copilot leaves is then
+# enforced separately by the ruleset's "require conversation resolution" rule.
+#
+# Signal reliability (verified against this repo): the requested_reviewers REST
+# endpoint does NOT list Copilot (returns empty), so it is not used. The timeline
+# "review_requested" event (reviewer login "Copilot") and the check run
+# ("copilot-pull-request-reviewer") are both reliable and are what we key on.
+
+name: Copilot review gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: copilot-review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  copilot-review-complete:
+    name: copilot-review-complete
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for any in-progress or pending Copilot review to finish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Copilot code review publishes its own check run under this name.
+          COPILOT_CHECK: copilot-pull-request-reviewer
+          # Seconds to wait for Copilot to start before re-evaluating.
+          INITIAL_WAIT: '30'
+          # Poll cadence and hard cap while waiting.
+          POLL_INTERVAL: '15'
+          MAX_WAIT: '1200'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = $env:REPO
+          $pr = $env:PR
+          $head = $env:HEAD_SHA
+          $copilotCheck = $env:COPILOT_CHECK
+          $initialWait = [int]$env:INITIAL_WAIT
+          $pollInterval = [int]$env:POLL_INTERVAL
+          $maxWait = [int]$env:MAX_WAIT
+
+          # Status of Copilot's review check on the current head commit:
+          # queued / in_progress / completed / none.
+          function Get-CopilotCheckStatus {
+            $resp = gh api "repos/$repo/commits/$head/check-runs?per_page=100" | ConvertFrom-Json
+            $runs = @($resp.check_runs | Where-Object { $_.name -eq $copilotCheck } | Sort-Object started_at)
+            if ($runs.Count -eq 0) { return 'none' }
+            return $runs[-1].status
+          }
+
+          # Copilot reviews appear under a login that starts with "copilot".
+          function Get-CopilotReviews {
+            $reviews = gh api "repos/$repo/pulls/$pr/reviews?per_page=100" | ConvertFrom-Json
+            @($reviews | Where-Object {
+                $_.user.login -and $_.user.login.ToLower().StartsWith('copilot') -and $_.state -ne 'PENDING'
+              })
+          }
+
+          # Has Copilot already submitted a (non-pending) review for THIS head?
+          function Test-CopilotReviewedHead {
+            @(Get-CopilotReviews | Where-Object { $_.commit_id -eq $head }).Count -gt 0
+          }
+
+          # Is there a Copilot review request not yet answered by a submitted
+          # review? (latest "review_requested" for Copilot newer than its latest
+          # submitted review). The requested_reviewers endpoint does not list
+          # Copilot, so we use the issue timeline events instead.
+          function Test-CopilotRequestOutstanding {
+            $timeline = gh api "repos/$repo/issues/$pr/timeline?per_page=100" | ConvertFrom-Json
+            $reqTimes = @($timeline | Where-Object {
+                $_.event -eq 'review_requested' -and $_.requested_reviewer -and
+                $_.requested_reviewer.login -and $_.requested_reviewer.login.ToLower().Contains('copilot')
+              } | ForEach-Object { [datetime]$_.created_at })
+            if ($reqTimes.Count -eq 0) { return $false }
+            $lastReq = ($reqTimes | Measure-Object -Maximum).Maximum
+
+            $revTimes = @(Get-CopilotReviews | ForEach-Object { [datetime]$_.submitted_at })
+            if ($revTimes.Count -eq 0) { return $true }
+            $lastRev = ($revTimes | Measure-Object -Maximum).Maximum
+            return $lastReq -gt $lastRev
+          }
+
+          # Should the gate keep waiting for Copilot on this head commit?
+          function Test-ShouldWait {
+            switch (Get-CopilotCheckStatus) {
+              'queued'      { return $true }
+              'in_progress' { return $true }
+              'completed'   { return $false }
+            }
+            # No check run yet for this head:
+            if (Test-CopilotReviewedHead) { return $false }
+            return [bool](Test-CopilotRequestOutstanding)
+          }
+
+          Write-Host "Waiting ${initialWait}s for Copilot to pick up commit $head..."
+          Start-Sleep -Seconds $initialWait
+
+          if (-not (Test-ShouldWait)) {
+            Write-Host 'Copilot is not reviewing this commit; gate passes.'
+            exit 0
+          }
+
+          Write-Host 'Copilot review in progress or pending; waiting for it to finish...'
+          $elapsed = 0
+          while (Test-ShouldWait) {
+            if ($elapsed -ge $maxWait) {
+              Write-Host "::warning::Timed out after ${maxWait}s waiting for Copilot; passing to avoid a stuck PR."
+              exit 0
+            }
+            Start-Sleep -Seconds $pollInterval
+            $elapsed += $pollInterval
+          }
+
+          Write-Host "Copilot review finished for $head; gate passes."
