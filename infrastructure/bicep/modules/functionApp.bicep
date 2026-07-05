@@ -10,7 +10,15 @@
 //   clientId / clientSecret / tenantId / WebUrl (stale OBO/Graph leftovers)
 //   JAVA_OPTS / HTTP_PLATFORM_DEBUG_PORT  (remote-debug artifacts on the slot)
 //   WEBSITE_HTTPLOGGING_RETENTION_DAYS    (slot-only drift)
-//   WEBSITE_RUN_FROM_PACKAGE              (deployment-managed; re-added by deploy)
+//
+// WEBSITE_RUN_FROM_PACKAGE is set to '1' here (NOT dropped). The GitHub Actions
+// deploy (Azure/functions-action, Run-From-Package) uploads the app package to
+// d:\home\data\SitePackages and writes packagename.txt; '1' makes the host run
+// the latest such package. This MUST be declared here because app settings are
+// applied as a full array — omitting it would STRIP the setting on every infra
+// deploy, causing the host to fall back to the stale content-share wwwroot
+// (old code) until the next code deploy. Keeping it '1' is idempotent with the
+// deploy action, which also sets '1'.
 //
 // Storage auth: AzureWebJobsStorage uses identity-based (keyless) connection via
 // the site/slot SAMI. The content share (WEBSITE_CONTENT*) still needs a
@@ -100,6 +108,13 @@ var sharedAppSettings = [
   {
     name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
     value: contentShareConnectionString
+  }
+  // Run-From-Package: the GitHub Actions deploy uploads the package to
+  // SitePackages and sets this to '1'. Declared here so infra deploys PRESERVE
+  // it instead of stripping it (see module header for the full rationale).
+  {
+    name: 'WEBSITE_RUN_FROM_PACKAGE'
+    value: '1'
   }
 ]
 

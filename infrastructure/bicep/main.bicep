@@ -126,6 +126,21 @@ module roleAssignments 'modules/roleAssignments.bicep' = {
   }
 }
 
+// Route all platform logs + metrics from the RG's resources into the workspace.
+module diagnostics 'modules/diagnostics.bicep' = {
+  name: 'diagnostics'
+  params: {
+    workspaceId: monitoring.outputs.workspaceId
+    storageAccountName: storageAccountName
+    functionAppName: functionAppName
+    slotName: slotName
+  }
+  dependsOn: [
+    storage
+    functionApp
+  ]
+}
+
 // Outputs consumed by scripts/configure-repo.ps1.
 output functionAppName string = functionApp.outputs.functionAppName
 output functionAppHostName string = functionApp.outputs.defaultHostName
