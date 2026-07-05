@@ -62,7 +62,7 @@ resource connectorDeploy 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 resource connectorDeployFic 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
   parent: connectorDeploy
-  name: 'gh-customconnector-deploy-ppdev'
+  name: 'github-env-${connectorDeployEnvironment}'
   properties: {
     issuer: issuer
     subject: 'repo:${githubRepo}:environment:${connectorDeployEnvironment}'
