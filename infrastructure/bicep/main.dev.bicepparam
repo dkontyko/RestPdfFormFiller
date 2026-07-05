@@ -18,8 +18,10 @@ param connectorDeployEnvironment = 'power-platform-dev'
 param retentionInDays = 31
 param dailyQuotaGb = 1
 
-// Stage the Entra-only ingestion switch: deploy with `false` first, confirm
-// telemetry still flows using the managed identity, then flip to `true`.
+// Entra-only (managed-identity) ingestion is the steady state (key-based auth
+// disabled). If telemetry ever stops after an identity or permission change,
+// set this to `false` temporarily to re-enable key-based ingestion while
+// debugging, then flip it back to `true`.
 param enforceEntraOnlyIngestion = true
 
 param tags = {

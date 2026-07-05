@@ -29,7 +29,7 @@ param retentionInDays int = 31
 @description('Daily ingestion cap in GB. Use -1 for no cap.')
 param dailyQuotaGb int = 1
 
-@description('Enforce Entra-only (managed-identity) ingestion by disabling local/key auth on App Insights. Stage this: deploy false first, verify telemetry, then set true.')
+@description('Enforce Entra-only (managed-identity) ingestion by disabling local/key auth on App Insights. Default true (steady state); set false only to temporarily re-enable key-based ingestion while verifying MI telemetry (e.g. during first-time onboarding or after an identity/permission change).')
 param enforceEntraOnlyIngestion bool = true
 
 @description('Tags applied to the monitoring resources.')

@@ -55,7 +55,7 @@ param retentionInDays int = 31
 @description('Workspace daily ingestion cap in GB (-1 = no cap).')
 param dailyQuotaGb int = 1
 
-@description('Enforce Entra-only App Insights ingestion (stage false -> true).')
+@description('Enforce Entra-only (managed-identity) App Insights ingestion by disabling key-based auth. Default true (steady state); set false only to temporarily re-enable key-based ingestion while verifying MI telemetry.')
 param enforceEntraOnlyIngestion bool = true
 
 @description('Tags applied to all resources.')
