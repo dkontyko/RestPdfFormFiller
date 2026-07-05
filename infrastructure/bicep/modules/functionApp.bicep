@@ -73,6 +73,12 @@ var sharedAppSettings = [
     name: 'AzureWebJobsStorage__accountName'
     value: storage.name
   }
+  // Tells the host to authenticate AzureWebJobsStorage with the system-assigned
+  // managed identity instead of an account key.
+  {
+    name: 'AzureWebJobsStorage__credential'
+    value: 'managedidentity'
+  }
   {
     name: 'AzureWebJobsSecretStorageType'
     value: 'Blob'
