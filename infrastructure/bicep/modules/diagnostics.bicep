@@ -3,15 +3,18 @@
 // that supports Azure Monitor diagnostic settings into the Log Analytics
 // workspace (PdfFormFillerLogs).
 //
-// Policy (for now): send EVERYTHING — `allLogs` category group + all metrics.
-// This is intentionally broad so we can see what's useful; trim categories
-// later once the signal is understood (watch the workspace daily-cap in
-// monitoring.bicep — currently 1 GB).
+// Policy: cost-conscious. FunctionAppLogs is the real signal; storage access
+// logs are almost entirely host<->mount / AzureWebJobsStorage noise that scales
+// with every invocation (StorageFileLogs was the #1 ingestion driver). We keep
+// a lightweight write/delete audit trail plus aggregated account metrics, and
+// drop the read firehose. Watch the workspace daily-cap in monitoring.bicep.
 //
 // Resources covered:
 //   - Function App (production site) + deployment slot  -> allLogs + AllMetrics
-//   - Storage blob/file/queue/table services            -> allLogs + Transaction
 //   - Storage account (root)                            -> Transaction + Capacity metrics
+//   - Storage blob service                              -> StorageWrite + StorageDelete logs
+//   - Storage file service                              -> StorageDelete logs only
+//   (queue/table services: not routed — negligible / no diagnostic value)
 //
 // Resources intentionally NOT covered (no diagnosticSettings support):
 //   - App Service plan (Microsoft.Web/serverfarms)
@@ -53,12 +56,6 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
     name: 'default'
   }
   resource fileService 'fileServices' existing = {
-    name: 'default'
-  }
-  resource queueService 'queueServices' existing = {
-    name: 'default'
-  }
-  resource tableService 'tableServices' existing = {
     name: 'default'
   }
 }
@@ -125,22 +122,25 @@ resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-pr
   }
 }
 
-// ---- Storage services: blob / file / queue / table (access logs) ----------
+// ---- Storage services: blob / file (access logs, trimmed) -----------------
+// Only state-changing ops are routed. Reads (host chatter, lease renewals) are
+// dropped, and per-service metrics are dropped in favour of the account-level
+// Transaction/Capacity rollup above. Queue/table services are not routed.
 
 resource blobDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: diagName
   scope: storage::blobService
   properties: {
     workspaceId: workspaceId
+    // AzureWebJobsStorage: keep writes/deletes as a light audit trail;
+    // StorageRead is dominated by lease-renewal / host-read noise.
     logs: [
       {
-        categoryGroup: 'allLogs'
+        category: 'StorageWrite'
         enabled: true
       }
-    ]
-    metrics: [
       {
-        category: 'Transaction'
+        category: 'StorageDelete'
         enabled: true
       }
     ]
@@ -152,55 +152,12 @@ resource fileDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-previ
   scope: storage::fileService
   properties: {
     workspaceId: workspaceId
+    // Content-share mount: the host's Create/Close/Read/QueryInfo/ChangeNotify
+    // chatter is the #1 ingestion driver with no diagnostic value. Keep deletes
+    // only, as a cheap tripwire for unexpected wwwroot/content removal.
     logs: [
       {
-        categoryGroup: 'allLogs'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'Transaction'
-        enabled: true
-      }
-    ]
-  }
-}
-
-resource queueDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: diagName
-  scope: storage::queueService
-  properties: {
-    workspaceId: workspaceId
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'Transaction'
-        enabled: true
-      }
-    ]
-  }
-}
-
-resource tableDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: diagName
-  scope: storage::tableService
-  properties: {
-    workspaceId: workspaceId
-    logs: [
-      {
-        categoryGroup: 'allLogs'
-        enabled: true
-      }
-    ]
-    metrics: [
-      {
-        category: 'Transaction'
+        category: 'StorageDelete'
         enabled: true
       }
     ]
