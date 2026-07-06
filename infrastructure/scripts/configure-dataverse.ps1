@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
 #requires -Version 7.0
+#requires -Modules Az.Accounts
 
 <#
 .SYNOPSIS
@@ -52,8 +53,11 @@
     Apply without the confirmation prompt.
 
 .NOTES
-    Prereqs: az CLI, logged in as a Dataverse System Administrator on the
-    target environment.
+    Prereqs: az CLI and the Az.Accounts PowerShell module, authenticated (az
+    login) as a Dataverse System Administrator on the target environment. The
+    Dataverse token is acquired via Get-AzAccessToken; the script bridges an Az
+    context from the az login session, prompting Connect-AzAccount only if none
+    exists yet.
 #>
 [CmdletBinding()]
 param(
@@ -77,9 +81,33 @@ function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -Foregro
 function Write-DryRun { param([string]$Message) Write-Host "DRY-RUN: $Message" -ForegroundColor DarkGray }
 function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
 
+function Initialize-AzContext {
+    # Bridge an Azure PowerShell context from the already-authenticated az CLI
+    # session (auth option B), so Get-AzAccessToken can mint the Dataverse token.
+    # Connect-AzAccount is only invoked interactively when no Az context exists
+    # yet; an existing context on the wrong subscription is switched in place.
+    param([string]$SubscriptionId)
+    $ctx = Get-AzContext
+    if ($ctx -and $ctx.Subscription -and $ctx.Subscription.Id -eq $SubscriptionId) { return }
+    if (-not $ctx) {
+        $tenantId = az account show --query tenantId -o tsv
+        if ($LASTEXITCODE -ne 0 -or -not $tenantId) {
+            Stop-WithError 'Could not read the az CLI tenant to bridge an Az context.'
+        }
+        Write-Log 'No Azure PowerShell context found; connecting (bridged from the az CLI session)...'
+        Connect-AzAccount -Tenant $tenantId -Subscription $SubscriptionId | Out-Null
+    }
+    else {
+        Set-AzContext -Subscription $SubscriptionId | Out-Null
+    }
+}
+
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) { Stop-WithError 'az CLI is required.' }
 $DataverseUrl = $DataverseUrl.TrimEnd('/')
 az account set --subscription $SubscriptionId | Out-Null
+
+# Bridge an Az context from the az session so Get-AzAccessToken can issue the token.
+Initialize-AzContext -SubscriptionId $SubscriptionId
 
 if ($Apply -and -not $Yes) {
     $reply = Read-Host "Register the connector identity in Dataverse '$DataverseUrl'? [y/N]"
@@ -93,7 +121,15 @@ Write-Log "UAMI clientId = $uamiClientId"
 
 $api = "$DataverseUrl/api/data/v9.2"
 Write-Log "Acquiring a Dataverse admin token for $DataverseUrl..."
-$token = az account get-access-token --resource $DataverseUrl --query accessToken -o tsv
+# Az.Accounts >= 5 returns the token as a SecureString; -ResourceUrl scopes it to
+# Dataverse. Unwrap it to the raw JWT for the Authorization header below.
+try {
+    $secureToken = (Get-AzAccessToken -ResourceUrl $DataverseUrl -AsSecureString -ErrorAction Stop).Token
+}
+catch {
+    Stop-WithError "Could not get a Dataverse token ($($_.Exception.Message)). Are you a System Administrator on this env?"
+}
+$token = [System.Net.NetworkCredential]::new('', $secureToken).Password
 if (-not $token) { Stop-WithError 'Could not get a Dataverse token. Are you a System Administrator on this env?' }
 
 $headers = @{
