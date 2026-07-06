@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
 #requires -Version 7.0
+#requires -Modules Az.Accounts, Az.Resources, Az.OperationalInsights, Az.ManagedServiceIdentity
 
 <#
 .SYNOPSIS
@@ -35,7 +36,14 @@
     Deploy without the confirmation prompt.
 
 .NOTES
-    Prereqs: az CLI, logged in (az login) with rights on RG PdfFormFiller.
+    Prereqs:
+      - az CLI, logged in (az login) with rights on RG PdfFormFiller. Still used
+        for the what-if preview and the template validate (the Az equivalents
+        expose a weaker diff / no validated-resource list, respectively).
+      - Azure PowerShell modules: Az.Accounts, Az.Resources,
+        Az.OperationalInsights, Az.ManagedServiceIdentity. The script bridges an
+        Az context from the az login session, prompting Connect-AzAccount only
+        if no Az context exists yet.
 #>
 [CmdletBinding()]
 param(
@@ -58,13 +66,36 @@ function Write-Log  { param([string]$Message) Write-Host "==> $Message" -Foregro
 function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -ForegroundColor Yellow }
 function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
 
+function Initialize-AzContext {
+    # Bridge an Azure PowerShell context from the already-authenticated az CLI
+    # session (auth option B). Connect-AzAccount is only invoked interactively
+    # when no Az context exists yet; an existing context on the wrong
+    # subscription is simply switched with Set-AzContext.
+    param([string]$SubscriptionId)
+    $ctx = Get-AzContext
+    if ($ctx -and $ctx.Subscription -and $ctx.Subscription.Id -eq $SubscriptionId) { return }
+    if (-not $ctx) {
+        $tenantId = az account show --query tenantId -o tsv
+        if ($LASTEXITCODE -ne 0 -or -not $tenantId) {
+            Stop-WithError 'Could not read the az CLI tenant to bridge an Az context.'
+        }
+        Write-Log 'No Azure PowerShell context found; connecting (bridged from the az CLI session)...'
+        Connect-AzAccount -Tenant $tenantId -Subscription $SubscriptionId | Out-Null
+    }
+    else {
+        Set-AzContext -Subscription $SubscriptionId | Out-Null
+    }
+}
+
 function Get-DesiredFederatedCredentialFromTemplate {
     # Resolve the intended FICs with `az deployment group validate` - a
     # lightweight template expansion (no what-if diff) that evaluates all
     # parameter / format() expressions server-side and lists every resource the
-    # deployment would touch. Returns a hashtable of UAMI name -> array of
-    # federated-credential names, kept in lock-step with identities.bicep
-    # without duplicating the list here.
+    # deployment would touch. Kept on the az CLI deliberately: the Az equivalent
+    # (Test-AzResourceGroupDeployment) surfaces only validation errors, not the
+    # validatedResources list this reconciliation depends on. Returns a hashtable
+    # of UAMI name -> array of federated-credential names, kept in lock-step with
+    # identities.bicep without duplicating the list here.
     #
     # The map is keyed by EVERY managed identity the template declares (parsed
     # from the identity resource IDs), so an identity with zero template FICs
@@ -114,26 +145,33 @@ function Sync-FederatedCredential {
         # An empty array here is authoritative: the template declares this
         # identity but wants NO FICs, so every existing FIC is a prune target.
         $wanted = $Desired[$uami]
-        # Capture the list output and its exit code separately: a failed list
-        # (e.g. permission error) must not be mistaken for "no FICs", which
-        # would silently skip pruning stale credentials.
-        $listed = az identity federated-credential list --identity-name $uami `
-            -g $ResourceGroup --query '[].name' -o tsv 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Could not list federated credentials for '$uami' (API error or insufficient permissions); skipping its reconciliation."
+        # A failed list (e.g. permission error) throws under the Stop preference;
+        # catch it and treat as "skip", never as "no FICs" - conflating the two
+        # would silently leave stale credentials in place.
+        try {
+            $listed = Get-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
+                -IdentityName $uami -ErrorAction Stop
+        }
+        catch {
+            Write-Warn "Could not list federated credentials for '$uami' ($($_.Exception.Message)); skipping its reconciliation."
             $ok = $false
             continue
         }
-        $actual = @($listed | Where-Object { $_ })
+        $actual = @($listed | ForEach-Object { $_.Name } | Where-Object { $_ })
         if (-not $actual) { continue }
         $extras = @($actual | Where-Object { $wanted -notcontains $_ })
         if (-not $extras) { Write-Log "FICs on '$uami' already match the template."; continue }
         foreach ($fic in $extras) {
             if ($Prune) {
                 Write-Log "Pruning stale FIC '$fic' from '$uami'..."
-                az identity federated-credential delete --name $fic `
-                    --identity-name $uami -g $ResourceGroup --yes | Out-Null
-                if ($LASTEXITCODE -ne 0) { Write-Warn "Failed to delete FIC '$fic' from '$uami'."; $ok = $false }
+                try {
+                    Remove-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
+                        -IdentityName $uami -Name $fic -Confirm:$false -ErrorAction Stop | Out-Null
+                }
+                catch {
+                    Write-Warn "Failed to delete FIC '$fic' from '$uami' ($($_.Exception.Message))."
+                    $ok = $false
+                }
             }
             else {
                 Write-Warn "Would prune stale FIC '$fic' from '$uami' (not in the template)."
@@ -143,22 +181,31 @@ function Sync-FederatedCredential {
     return $ok
 }
 
-if (-not (Get-Command az -ErrorAction SilentlyContinue)) { Stop-WithError 'az CLI is required.' }
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    Stop-WithError 'az CLI is required (used for the what-if preview and template validate).'
+}
 
 az account show 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) { Stop-WithError "Not logged in. Run 'az login' first." }
 az account set --subscription $SubscriptionId | Out-Null
 
+# Bridge an Azure PowerShell context from that az session (auth option B) for the
+# Az cmdlets below: workspace preflight, deployment, and FIC reconciliation.
+Initialize-AzContext -SubscriptionId $SubscriptionId
+
 # --- Preflight: a Log Analytics workspace region cannot be changed in place.
 # If the old westus2 workspace still exists, Bicep will collide on the name.
 # It must be deleted first (data history is intentionally discarded - see README).
-$existingWsLocation = az monitor log-analytics workspace show `
-    -g $ResourceGroup -n $WorkspaceName --query location -o tsv 2>$null
-if ($existingWsLocation -and $existingWsLocation -ne $Location) {
-    Write-Warn "Workspace '$WorkspaceName' currently exists in '$existingWsLocation', but the"
+# A not-found workspace throws under the Stop preference; treat that as "absent".
+$existingWs = try {
+    Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroup -Name $WorkspaceName -ErrorAction Stop
+}
+catch { $null }
+if ($existingWs -and $existingWs.Location -ne $Location) {
+    Write-Warn "Workspace '$WorkspaceName' currently exists in '$($existingWs.Location)', but the"
     Write-Warn "target is '$Location'. A workspace region cannot be changed in place."
     Write-Warn 'Delete the old workspace first (this discards its log history):'
-    Write-Warn "  az monitor log-analytics workspace delete -g $ResourceGroup -n $WorkspaceName --force true --yes"
+    Write-Warn "  Remove-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroup -Name $WorkspaceName -ForceDelete -Force"
     Stop-WithError 'Aborting so the region move is a deliberate, confirmed step.'
 }
 
@@ -185,12 +232,13 @@ if (-not $Yes) {
 
 $deployName = "restpdf-infra-$(Get-Date -Format 'yyyyMMddHHmmss')"
 Write-Log "Deploying ($deployName)..."
-az deployment group create `
-    --resource-group $ResourceGroup `
-    --template-file $Template `
-    --parameters $ParamFile `
-    --name $deployName
-if ($LASTEXITCODE -ne 0) { Stop-WithError 'Deployment failed.' }
+# A deployment failure throws under $ErrorActionPreference = 'Stop', so there is
+# no $LASTEXITCODE check to make here - the run aborts on its own.
+$deployment = New-AzResourceGroupDeployment `
+    -ResourceGroupName $ResourceGroup `
+    -TemplateFile $Template `
+    -TemplateParameterFile $ParamFile `
+    -Name $deployName
 
 # Prune any FICs not declared in the template (the new ones now exist).
 Write-Log 'Reconciling federated credentials to match the template...'
@@ -198,7 +246,7 @@ $desiredFics = Get-DesiredFederatedCredentialFromTemplate
 $reconcileOk = Sync-FederatedCredential -Desired $desiredFics -Prune:$true
 
 Write-Log 'Deployment complete. Outputs:'
-az deployment group show -g $ResourceGroup --name $deployName --query properties.outputs -o jsonc
+$deployment.Outputs | ConvertTo-Json -Depth 20
 
 # The deployment itself succeeded above; if the post-deploy FIC reconciliation
 # could not complete, fail loudly (non-zero exit) so a stale credential is not
