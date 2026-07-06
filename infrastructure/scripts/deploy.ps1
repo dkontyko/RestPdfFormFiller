@@ -135,50 +135,89 @@ function Get-DesiredFederatedCredentialFromTemplate {
     return $map
 }
 
-function Sync-FederatedCredential {
-    # Returns $true if every identity reconciled cleanly, $false if any list or
-    # delete call failed (so the caller can decide whether to fail the run).
-    param([hashtable]$Desired, [bool]$Prune)
-    if (-not $Desired) { return $true } # resolution failed/skipped; already warned
+<#
+.SYNOPSIS
+    Reconcile a single managed identity's federated credentials against the
+    template, pruning (or, in preview, reporting) any it does not declare.
+
+.DESCRIPTION
+    $WantedFic is authoritative: an empty array means the template declares
+    this identity but wants NO federated credentials, so every live FIC is a
+    prune target. A failed list (e.g. a permissions error) is deliberately
+    never treated as "no FICs" - that would silently leave stale credentials
+    in place - so it returns $false instead of an empty set.
+
+.OUTPUTS
+    [bool] $true when the identity reconciled cleanly (including when there
+    is nothing to do); $false when the list, or any individual delete, failed.
+#>
+function Sync-FederatedCredentialForIdentity {
+    param(
+        [string]$IdentityName,
+        [string[]]$WantedFic,
+        [bool]$Prune
+    )
+
+    try {
+        $live = Get-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
+            -IdentityName $IdentityName -ErrorAction Stop
+    }
+    catch {
+        Write-Warn "Could not list federated credentials for '$IdentityName' ($($_.Exception.Message)); skipping its reconciliation."
+        return $false
+    }
+
+    $live = @($live.Name | Where-Object { $_ })
+    if (-not $live) { return $true }
+
+    $stale = @($live | Where-Object { $WantedFic -notcontains $_ })
+    if (-not $stale) {
+        Write-Log "FICs on '$IdentityName' already match the template."
+        return $true
+    }
+
+    if (-not $Prune) {
+        $stale | ForEach-Object { Write-Warn "Would prune stale FIC '$_' from '$IdentityName' (not in the template)." }
+        return $true
+    }
+
     $ok = $true
-    foreach ($uami in $Desired.Keys) {
-        # An empty array here is authoritative: the template declares this
-        # identity but wants NO FICs, so every existing FIC is a prune target.
-        $wanted = $Desired[$uami]
-        # A failed list (e.g. permission error) throws under the Stop preference;
-        # catch it and treat as "skip", never as "no FICs" - conflating the two
-        # would silently leave stale credentials in place.
+    foreach ($fic in $stale) {
+        Write-Log "Pruning stale FIC '$fic' from '$IdentityName'..."
         try {
-            $listed = Get-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
-                -IdentityName $uami -ErrorAction Stop
+            Remove-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
+                -IdentityName $IdentityName -Name $fic -Confirm:$false -ErrorAction Stop | Out-Null
         }
         catch {
-            Write-Warn "Could not list federated credentials for '$uami' ($($_.Exception.Message)); skipping its reconciliation."
+            Write-Warn "Failed to delete FIC '$fic' from '$IdentityName' ($($_.Exception.Message))."
             $ok = $false
-            continue
-        }
-        $actual = @($listed | ForEach-Object { $_.Name } | Where-Object { $_ })
-        if (-not $actual) { continue }
-        $extras = @($actual | Where-Object { $wanted -notcontains $_ })
-        if (-not $extras) { Write-Log "FICs on '$uami' already match the template."; continue }
-        foreach ($fic in $extras) {
-            if ($Prune) {
-                Write-Log "Pruning stale FIC '$fic' from '$uami'..."
-                try {
-                    Remove-AzFederatedIdentityCredential -ResourceGroupName $ResourceGroup `
-                        -IdentityName $uami -Name $fic -Confirm:$false -ErrorAction Stop | Out-Null
-                }
-                catch {
-                    Write-Warn "Failed to delete FIC '$fic' from '$uami' ($($_.Exception.Message))."
-                    $ok = $false
-                }
-            }
-            else {
-                Write-Warn "Would prune stale FIC '$fic' from '$uami' (not in the template)."
-            }
         }
     }
     return $ok
+}
+
+<#
+.SYNOPSIS
+    Reconcile every managed identity's federated credentials against the
+    template, delegating each to Sync-FederatedCredentialForIdentity.
+
+.DESCRIPTION
+    A $null $Desired means upstream resolution failed or was skipped (already
+    warned), which is treated as a clean no-op.
+
+.OUTPUTS
+    [bool] $true only if every identity reconciled cleanly; $false if any
+    list or delete failed, so the caller can decide whether to fail the run.
+#>
+function Sync-FederatedCredential {
+    param([hashtable]$Desired, [bool]$Prune)
+
+    if (-not $Desired) { return $true }
+
+    $outcomes = $Desired.Keys | ForEach-Object {
+        Sync-FederatedCredentialForIdentity -IdentityName $_ -WantedFic $Desired[$_] -Prune $Prune
+    }
+    return $outcomes -notcontains $false
 }
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
