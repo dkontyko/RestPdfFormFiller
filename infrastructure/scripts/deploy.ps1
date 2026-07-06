@@ -96,10 +96,12 @@ function Get-DesiredFederatedCredentialFromTemplate {
         --template-file $Template `
         --parameters $ParamFile `
         --query 'properties.validatedResources[].id' -o tsv 2>$null
+
     if ($LASTEXITCODE -ne 0) {
         Write-Warn 'Could not validate the template to resolve federated credentials (API error or insufficient permissions).'
         return $null
     }
+    
     $map = @{}
     foreach ($id in @($ids | Where-Object { $_ })) {
         # A federated-credential child: record it under its parent identity.
