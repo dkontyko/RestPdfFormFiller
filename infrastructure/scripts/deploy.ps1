@@ -66,11 +66,17 @@ function Write-Log  { param([string]$Message) Write-Host "==> $Message" -Foregro
 function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -ForegroundColor Yellow }
 function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
 
+<#
+.SYNOPSIS
+    Ensure an Azure PowerShell context on the target subscription.
+
+.DESCRIPTION
+    Bridges an Az context from the already-authenticated az CLI session (auth
+    option B). Connect-AzAccount is only invoked interactively when no Az context
+    exists yet; an existing context on the wrong subscription is simply switched
+    with Set-AzContext.
+#>
 function Initialize-AzContext {
-    # Bridge an Azure PowerShell context from the already-authenticated az CLI
-    # session (auth option B). Connect-AzAccount is only invoked interactively
-    # when no Az context exists yet; an existing context on the wrong
-    # subscription is simply switched with Set-AzContext.
     param([string]$SubscriptionId)
     $ctx = Get-AzContext
     if ($ctx -and $ctx.Subscription -and $ctx.Subscription.Id -eq $SubscriptionId) { return }
@@ -87,22 +93,31 @@ function Initialize-AzContext {
     }
 }
 
+<#
+.SYNOPSIS
+    Resolve the federated credentials the template intends for each managed
+    identity.
+
+.DESCRIPTION
+    Uses `az deployment group validate` - a lightweight template expansion (no
+    what-if diff) that evaluates all parameter / format() expressions
+    server-side and lists every resource the deployment would touch. Kept on the
+    az CLI deliberately: the Az equivalent (Test-AzResourceGroupDeployment)
+    surfaces only validation errors, not the validatedResources list this
+    reconciliation depends on. The result stays in lock-step with
+    identities.bicep without duplicating the list here.
+
+    The map is keyed by EVERY managed identity the template declares (parsed from
+    the identity resource IDs), so an identity with zero template FICs still
+    appears with an empty array and its stale FICs get pruned.
+
+.OUTPUTS
+    [hashtable] UAMI name -> string[] of FIC names; or $null when resolution
+    itself fails (validate error, or no identities parsed) so the caller can skip
+    pruning rather than mistake a false-empty for "the template wants no FICs"
+    and delete live credentials.
+#>
 function Get-DesiredFederatedCredentialFromTemplate {
-    # Resolve the intended FICs with `az deployment group validate` - a
-    # lightweight template expansion (no what-if diff) that evaluates all
-    # parameter / format() expressions server-side and lists every resource the
-    # deployment would touch. Kept on the az CLI deliberately: the Az equivalent
-    # (Test-AzResourceGroupDeployment) surfaces only validation errors, not the
-    # validatedResources list this reconciliation depends on. Returns a hashtable
-    # of UAMI name -> array of federated-credential names, kept in lock-step with
-    # identities.bicep without duplicating the list here.
-    #
-    # The map is keyed by EVERY managed identity the template declares (parsed
-    # from the identity resource IDs), so an identity with zero template FICs
-    # still appears with an empty array and its stale FICs get pruned. Returns
-    # $null when resolution itself fails (validate error, or no identities
-    # parsed) so the caller can skip pruning rather than mistake a false-empty
-    # for "the template wants no FICs" and delete live credentials.
     $ids = az deployment group validate `
         --resource-group $ResourceGroup `
         --template-file $Template `

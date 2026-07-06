@@ -81,11 +81,17 @@ function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -Foregro
 function Write-DryRun { param([string]$Message) Write-Host "DRY-RUN: $Message" -ForegroundColor DarkGray }
 function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
 
+<#
+.SYNOPSIS
+    Ensure an Azure PowerShell context on the target subscription.
+
+.DESCRIPTION
+    Bridges an Az context from the already-authenticated az CLI session (auth
+    option B) so Get-AzAccessToken can mint the Dataverse token. Connect-AzAccount
+    is only invoked interactively when no Az context exists yet; an existing
+    context on the wrong subscription is switched in place.
+#>
 function Initialize-AzContext {
-    # Bridge an Azure PowerShell context from the already-authenticated az CLI
-    # session (auth option B), so Get-AzAccessToken can mint the Dataverse token.
-    # Connect-AzAccount is only invoked interactively when no Az context exists
-    # yet; an existing context on the wrong subscription is switched in place.
     param([string]$SubscriptionId)
     $ctx = Get-AzContext
     if ($ctx -and $ctx.Subscription -and $ctx.Subscription.Id -eq $SubscriptionId) { return }
@@ -139,6 +145,16 @@ $headers = @{
     Accept             = 'application/json'
 }
 
+<#
+.SYNOPSIS
+    Invoke a Dataverse Web API request using the shared bearer auth headers.
+
+.DESCRIPTION
+    Merges any per-call $ExtraHeaders over the script-scoped $headers and issues
+    the request against the script-scoped $api base URL. (Those ambient
+    dependencies are slated to be threaded through an explicit context object in
+    the later structural pass.)
+#>
 function Invoke-Dv {
     param([string]$Path, [string]$Method = 'Get', $Body = $null, [hashtable]$ExtraHeaders = @{})
     $h = $headers.Clone()

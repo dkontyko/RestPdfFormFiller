@@ -101,6 +101,16 @@ if (-not ($FunctionClientId -and $TenantId -and $SubscriptionId)) {
 }
 
 # --- Helpers ------------------------------------------------------------------
+
+<#
+.SYNOPSIS
+    Ensure a GitHub environment exists and limit its deployments to 'main'.
+
+.DESCRIPTION
+    Creates/updates the environment with a custom branch policy, then reconciles
+    its deployment branch policies down to exactly one 'main' policy (removing
+    any strays). In -DryRun mode only the intended calls are printed.
+#>
 function Set-GhEnvironment {
     param([string]$EnvName)
     Write-Log "Ensuring environment '$EnvName' (deployments limited to 'main')..."
@@ -143,6 +153,10 @@ function Set-GhEnvironment {
     }
 }
 
+<#
+.SYNOPSIS
+    Set (or update) a secret on a GitHub environment.
+#>
 function Set-GhEnvSecret {
     param([string]$EnvName, [string]$Name, [string]$Value)
     Write-Log "  secret $Name -> env $EnvName"
@@ -150,6 +164,10 @@ function Set-GhEnvSecret {
     gh secret set $Name --env $EnvName --repo $Repo --body $Value | Out-Null
 }
 
+<#
+.SYNOPSIS
+    Set (or update) a variable on a GitHub environment.
+#>
 function Set-GhEnvVar {
     param([string]$EnvName, [string]$Name, [string]$Value)
     Write-Log "  variable $Name -> env $EnvName"
