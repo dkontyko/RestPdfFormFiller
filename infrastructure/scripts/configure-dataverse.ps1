@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-#requires -Version 7.0
+#requires -Version 7.4
 #requires -Modules Az.Accounts
 
 <#
@@ -76,37 +76,9 @@ $ErrorActionPreference = 'Stop'
 # Preview by default; -Apply performs the changes.
 $DryRun = -not $Apply
 
-function Write-Log  { param([string]$Message) Write-Host "==> $Message" -ForegroundColor Blue }
-function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -ForegroundColor Yellow }
-function Write-DryRun { param([string]$Message) Write-Host "DRY-RUN: $Message" -ForegroundColor DarkGray }
-function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
-
-<#
-.SYNOPSIS
-    Ensure an Azure PowerShell context on the target subscription.
-
-.DESCRIPTION
-    Bridges an Az context from the already-authenticated az CLI session (auth
-    option B) so Get-AzAccessToken can mint the Dataverse token. Connect-AzAccount
-    is only invoked interactively when no Az context exists yet; an existing
-    context on the wrong subscription is switched in place.
-#>
-function Initialize-AzContext {
-    param([string]$SubscriptionId)
-    $ctx = Get-AzContext
-    if ($ctx -and $ctx.Subscription -and $ctx.Subscription.Id -eq $SubscriptionId) { return }
-    if (-not $ctx) {
-        $tenantId = az account show --query tenantId -o tsv
-        if ($LASTEXITCODE -ne 0 -or -not $tenantId) {
-            Stop-WithError 'Could not read the az CLI tenant to bridge an Az context.'
-        }
-        Write-Log 'No Azure PowerShell context found; connecting (bridged from the az CLI session)...'
-        Connect-AzAccount -Tenant $tenantId -Subscription $SubscriptionId | Out-Null
-    }
-    else {
-        Set-AzContext -Subscription $SubscriptionId | Out-Null
-    }
-}
+# Shared helpers (Write-Log/Warn/DryRun, Stop-WithError, Initialize-AzContext)
+# live in common.ps1, dot-sourced so a single copy serves all three scripts.
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) { Stop-WithError 'az CLI is required.' }
 $DataverseUrl = $DataverseUrl.TrimEnd('/')

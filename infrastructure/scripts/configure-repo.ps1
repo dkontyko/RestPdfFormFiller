@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-#requires -Version 7.0
+#requires -Version 7.4
 
 <#
 .SYNOPSIS
@@ -63,10 +63,9 @@ $AzureEnv           = 'azure-dev'
 $PpEnv              = 'power-platform-dev'
 $PpEnvironmentUrl   = 'https://orgddd15023.crm.dynamics.com'
 
-function Write-Log  { param([string]$Message) Write-Host "==> $Message" -ForegroundColor Blue }
-function Write-Warn { param([string]$Message) Write-Host "[!] $Message" -ForegroundColor Yellow }
-function Write-DryRun { param([string]$Message) Write-Host "DRY-RUN: $Message" -ForegroundColor DarkGray }
-function Stop-WithError { param([string]$Message) Write-Host "[x] $Message" -ForegroundColor Red; exit 1 }
+# Shared helpers (Write-Log/Warn/DryRun, Stop-WithError) live in common.ps1,
+# dot-sourced so a single copy serves all three infra scripts.
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 foreach ($tool in 'gh', 'az') {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Stop-WithError "'$tool' is required." }
