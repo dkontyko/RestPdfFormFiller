@@ -16,7 +16,7 @@
         <functionAppName>RestPdfFormFiller</functionAppName>
         <netty.version>4.1.135.Final</netty.version>
         <tools.jackson.version>3.2.0</tools.jackson.version>
-        <com.fasterxml.jackson.core.version>2.22.0</com.fasterxml.jackson.core.version>
+        <com.fasterxml.jackson.core.version>2.22.1</com.fasterxml.jackson.core.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <kiota.abstractions.version>1.9.3</kiota.abstractions.version>
         <opentelemetry.api.version>1.63.0</opentelemetry.api.version>
