@@ -2,8 +2,11 @@ package app.djk.RestPdfFormFiller.Pdf;
 
 import app.djk.RestPdfFormFiller.projectExceptions.InvalidXfaFormException;
 import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
+import org.openpdf.text.DocumentException;
+import org.openpdf.text.pdf.AcroFields;
 import org.openpdf.text.pdf.PdfReader;
 import org.openpdf.text.pdf.PdfStamper;
+import org.openpdf.text.pdf.XfaForm;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
@@ -18,7 +21,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class RestPdfApi {
 
@@ -213,9 +219,67 @@ public class RestPdfApi {
 
             if (dataToWrite != null) {
                 xfaForm.fillXfaForm(dataToWrite);
+                synchronizeAcroFormFields(pdfStamper.getAcroFields(), dataToWrite, existingFormRoot, writeMode);
             }
         }
         return outputStream.toByteArray();
+    }
+
+    /**
+     * Mirrors written XFA data into the hybrid PDF's AcroForm fields.
+     * <p>
+     * The DA 4187 contains both XFA data and conventional PDF widget fields. {@link XfaForm#fillXfaForm(Node)}
+     * replaces only the XFA dataset, leaving a viewer that renders widget appearances with stale values. OpenPDF's
+     * {@link AcroFields#mergeXfaData(Node)} deliberately takes the hybrid-form path: it resolves each XFA field to
+     * its AcroForm counterpart, updates its value, and regenerates its appearance. Keeping that operation after the
+     * dataset replacement makes both representations agree without hard-coding the form's field names.
+     * <p>
+     * A sparse {@link WriteMode#PUT} has no XFA nodes for the fields the caller omitted. Those values must be blanked
+     * in the classic widgets too, but setting them while XFA is enabled would re-create them in the new dataset.
+     * Temporarily disabling only OpenPDF's XFA routing lets the standard fields be cleared without altering the
+     * replacement dataset. The flag is restored before the stamper closes.
+     *
+     * @param acroFields       The live AcroForm fields from the stamper.
+     * @param writtenFormRoot  The XFA form-root written to the dataset.
+     * @param previousFormRoot The XFA form-root that existed before this request.
+     * @param writeMode        The requested write strategy.
+     * @throws IOException If OpenPDF cannot synchronize a field or generate its appearance.
+     */
+    private static void synchronizeAcroFormFields(final AcroFields acroFields, final Node writtenFormRoot,
+                                                   final Element previousFormRoot, final WriteMode writeMode)
+            throws IOException {
+        try {
+            acroFields.mergeXfaData(writtenFormRoot);
+
+            if (writeMode != WriteMode.PUT || previousFormRoot == null) {
+                return;
+            }
+
+            final Set<String> writtenFieldNames = new HashSet<>(
+                    new XfaForm.Xml2SomDatasets(writtenFormRoot).getNamesOrder());
+            final var previousFieldNames = new XfaForm.Xml2SomDatasets(previousFormRoot).getNamesOrder();
+            final var xfaForm = acroFields.getXfa();
+            final var acroFormFieldsToClear = new ArrayList<String>();
+            for (final var fieldName : previousFieldNames) {
+                if (!writtenFieldNames.contains(fieldName)) {
+                    final var acroFormFieldName = xfaForm.findFieldName(fieldName, acroFields);
+                    if (acroFormFieldName != null) {
+                        acroFormFieldsToClear.add(acroFormFieldName);
+                    }
+                }
+            }
+            final var xfaPresent = xfaForm.isXfaPresent();
+            xfaForm.setXfaPresent(false);
+            try {
+                for (final var fieldName : acroFormFieldsToClear) {
+                    acroFields.setField(fieldName, "");
+                }
+            } finally {
+                xfaForm.setXfaPresent(xfaPresent);
+            }
+        } catch (DocumentException e) {
+            throw new IOException("Could not synchronize XFA data with AcroForm fields.", e);
+        }
     }
 
     /**

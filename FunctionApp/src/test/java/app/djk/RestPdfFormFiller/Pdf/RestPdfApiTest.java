@@ -6,14 +6,20 @@ import app.djk.RestPdfFormFiller.projectExceptions.WriteConflictException;
 import org.junit.jupiter.api.Test;
 import org.openpdf.text.Document;
 import org.openpdf.text.Paragraph;
+import org.openpdf.text.pdf.PdfDictionary;
+import org.openpdf.text.pdf.PdfName;
+import org.openpdf.text.pdf.PdfReader;
 import org.openpdf.text.pdf.PdfWriter;
+import org.openpdf.text.pdf.PRStream;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,6 +78,20 @@ class RestPdfApiTest {
         assertTrue(resultXml.contains("<ORG_C>NEWORG</ORG_C>"));
         // A field not present in the request kept its existing value.
         assertTrue(resultXml.contains("<EFFECITIVE>9988</EFFECITIVE>"));
+    }
+
+    @Test
+    void fillXfaFormPatchSynchronizesAcroFormValueAndAppearance() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var expectedRemarks = "AcroForm appearance validation";
+        final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"REMARKS\":\""
+                + expectedRemarks + "\"}}}}";
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, formData, WriteMode.PATCH, PatchMode.OVERWRITE);
+
+        assertAcroFormValueAndAppearance(
+                filledBytes, "form1[0].Page1[0].REMARKS[0]", expectedRemarks);
     }
 
     @Test
@@ -144,6 +164,8 @@ class RestPdfApiTest {
         assertFalse(resultXml.contains("6543"));
         // Including fields on an entirely-omitted branch (Page2).
         assertFalse(resultXml.contains("222222222"));
+        assertAcroFormValueAndAppearance(
+                filledBytes, "form1[0].Page1[0].REMARKS[0]", "");
     }
 
     @Test
@@ -219,6 +241,31 @@ class RestPdfApiTest {
             document.add(new Paragraph("Simple PDF"));
             document.close();
             return output.toByteArray();
+        }
+    }
+
+    private static void assertAcroFormValueAndAppearance(final byte[] pdfBytes, final String fieldName,
+                                                          final String expectedValue) throws Exception {
+        try (final var reader = new PdfReader(pdfBytes)) {
+            final var item = reader.getAcroFields().getFieldItem(fieldName);
+            assertTrue(item != null, () -> "Missing AcroForm field " + fieldName);
+
+            final PdfDictionary value = item.getValue(0);
+            assertEquals(expectedValue, value.getAsString(PdfName.V).toUnicodeString());
+
+            final PdfDictionary widget = item.getWidget(0);
+            assertTrue(widget != null, () -> "Missing widget for " + fieldName);
+            final var appearanceDictionary = widget.getAsDict(PdfName.AP);
+            assertTrue(appearanceDictionary != null, () -> "Missing appearance dictionary for " + fieldName);
+            final var normalAppearance = appearanceDictionary.getAsStream(PdfName.N);
+            final var appearance = assertInstanceOf(PRStream.class, normalAppearance,
+                    () -> "Normal appearance is not a stream for " + fieldName);
+            final var appearanceBytes = PdfReader.getStreamBytes(appearance);
+            final var appearanceText = new String(appearanceBytes, StandardCharsets.ISO_8859_1);
+            if (!expectedValue.isEmpty()) {
+                assertTrue(appearanceText.contains(expectedValue),
+                        () -> "Appearance did not contain the expected value for " + fieldName);
+            }
         }
     }
 }
