@@ -53,7 +53,7 @@
         <dependency>
             <groupId>tools.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-xml</artifactId>
-            <version>3.2.2</version>
+            <version>${tools.jackson.version}</version>
         </dependency>
 
 
