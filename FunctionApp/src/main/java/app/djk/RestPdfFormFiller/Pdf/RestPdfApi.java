@@ -282,7 +282,9 @@ public class RestPdfApi {
         xfaForm.setXfaPresent(false);
         try {
             for (final var fieldName : acroFormFieldsToClear) {
-                acroFields.setField(fieldName, "");
+                if (!acroFields.setField(fieldName, "")) {
+                    throw new IOException("Could not clear AcroForm field '" + fieldName + "'.");
+                }
             }
         } finally {
             xfaForm.setXfaPresent(xfaPresent);
