@@ -251,7 +251,10 @@ class RestPdfApiTest {
             assertTrue(item != null, () -> "Missing AcroForm field " + fieldName);
 
             final PdfDictionary value = item.getValue(0);
-            assertEquals(expectedValue, value.getAsString(PdfName.V).toUnicodeString());
+            assertTrue(value != null, () -> "Missing value dictionary for " + fieldName);
+            final var fieldValue = value.getAsString(PdfName.V);
+            assertTrue(fieldValue != null, () -> "Missing value for " + fieldName);
+            assertEquals(expectedValue, fieldValue.toUnicodeString());
 
             final PdfDictionary widget = item.getWidget(0);
             assertTrue(widget != null, () -> "Missing widget for " + fieldName);
