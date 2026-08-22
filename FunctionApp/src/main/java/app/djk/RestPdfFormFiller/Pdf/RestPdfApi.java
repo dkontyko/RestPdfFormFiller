@@ -234,10 +234,8 @@ public class RestPdfApi {
      * its AcroForm counterpart, updates its value, and regenerates its appearance. Keeping that operation after the
      * dataset replacement makes both representations agree without hard-coding the form's field names.
      * <p>
-     * A sparse {@link WriteMode#PUT} has no XFA nodes for the fields the caller omitted. Those values must be blanked
-     * in the classic widgets too, but setting them while XFA is enabled would re-create them in the new dataset.
-     * Temporarily disabling only OpenPDF's XFA routing lets the standard fields be cleared without altering the
-     * replacement dataset. The flag is restored before the stamper closes.
+     * A sparse {@link WriteMode#PUT} needs an extra cleanup pass because its omitted fields are not visited by
+     * {@code mergeXfaData}. That pass clears their AcroForm values without adding them back to the new XFA dataset.
      *
      * @param acroFields       The live AcroForm fields from the stamper.
      * @param writtenFormRoot  The XFA form-root written to the dataset.
@@ -251,35 +249,73 @@ public class RestPdfApi {
         try {
             acroFields.mergeXfaData(writtenFormRoot);
 
-            if (writeMode != WriteMode.PUT || previousFormRoot == null) {
-                return;
-            }
-
-            final Set<String> writtenFieldNames = new HashSet<>(
-                    new XfaForm.Xml2SomDatasets(writtenFormRoot).getNamesOrder());
-            final var previousFieldNames = new XfaForm.Xml2SomDatasets(previousFormRoot).getNamesOrder();
-            final var xfaForm = acroFields.getXfa();
-            final var acroFormFieldsToClear = new ArrayList<String>();
-            for (final var fieldName : previousFieldNames) {
-                if (!writtenFieldNames.contains(fieldName)) {
-                    final var acroFormFieldName = xfaForm.findFieldName(fieldName, acroFields);
-                    if (acroFormFieldName != null) {
-                        acroFormFieldsToClear.add(acroFormFieldName);
-                    }
-                }
-            }
-            final var xfaPresent = xfaForm.isXfaPresent();
-            xfaForm.setXfaPresent(false);
-            try {
-                for (final var fieldName : acroFormFieldsToClear) {
-                    acroFields.setField(fieldName, "");
-                }
-            } finally {
-                xfaForm.setXfaPresent(xfaPresent);
+            if (writeMode == WriteMode.PUT && previousFormRoot != null) {
+                clearOmittedAcroFormFields(acroFields, writtenFormRoot, previousFormRoot);
             }
         } catch (DocumentException e) {
             throw new IOException("Could not synchronize XFA data with AcroForm fields.", e);
         }
+    }
+
+    /**
+     * Clears legacy widget values for XFA fields omitted by a PUT request.
+     *
+     * @param acroFields       The live AcroForm fields from the stamper.
+     * @param writtenFormRoot  The XFA form-root written to the dataset.
+     * @param previousFormRoot The XFA form-root that existed before this request.
+     * @throws IOException       If OpenPDF cannot regenerate a field appearance.
+     * @throws DocumentException If OpenPDF cannot update a field.
+     */
+    private static void clearOmittedAcroFormFields(final AcroFields acroFields, final Node writtenFormRoot,
+                                                    final Element previousFormRoot)
+            throws IOException, DocumentException {
+        final var xfaForm = acroFields.getXfa();
+        final var acroFormFieldsToClear = findOmittedAcroFormFields(
+                acroFields, xfaForm, writtenFormRoot, previousFormRoot);
+        if (acroFormFieldsToClear.isEmpty()) {
+            return;
+        }
+
+        final var xfaPresent = xfaForm.isXfaPresent();
+        // setField normally updates both representations. Disable only that routing so omitted fields stay absent
+        // from the replacement XFA dataset while their existing widget values and appearances are cleared.
+        xfaForm.setXfaPresent(false);
+        try {
+            for (final var fieldName : acroFormFieldsToClear) {
+                acroFields.setField(fieldName, "");
+            }
+        } finally {
+            xfaForm.setXfaPresent(xfaPresent);
+        }
+    }
+
+    /**
+     * Resolves omitted XFA names to their corresponding AcroForm names before XFA routing is disabled.
+     *
+     * @param acroFields       The live AcroForm fields from the stamper.
+     * @param xfaForm          The XFA form used to resolve hybrid-form field names.
+     * @param writtenFormRoot  The XFA form-root written to the dataset.
+     * @param previousFormRoot The XFA form-root that existed before this request.
+     * @return The conventional PDF fields that must be cleared.
+     */
+    private static List<String> findOmittedAcroFormFields(final AcroFields acroFields, final XfaForm xfaForm,
+                                                           final Node writtenFormRoot, final Element previousFormRoot) {
+        final Set<String> writtenXfaFields = new HashSet<>(
+                new XfaForm.Xml2SomDatasets(writtenFormRoot).getNamesOrder());
+        final var previousXfaFields = new XfaForm.Xml2SomDatasets(previousFormRoot).getNamesOrder();
+        final var acroFormFieldsToClear = new ArrayList<String>();
+
+        for (final var xfaFieldName : previousXfaFields) {
+            if (writtenXfaFields.contains(xfaFieldName)) {
+                continue;
+            }
+
+            final var acroFormFieldName = xfaForm.findFieldName(xfaFieldName, acroFields);
+            if (acroFormFieldName != null) {
+                acroFormFieldsToClear.add(acroFormFieldName);
+            }
+        }
+        return acroFormFieldsToClear;
     }
 
     /**
