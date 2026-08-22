@@ -170,6 +170,27 @@ class RestPdfApiTest {
     }
 
     @Test
+    void fillXfaFormPutClearsOmittedAcroFormAppearance() throws Exception {
+        final var samplePdfBytes = readSampleDa4187Pdf();
+        final var previousRemarks = "Remarks appearance that must be cleared";
+        final var remarksPatch = "{\"data\":{\"form1\":{\"Page1\":{\"REMARKS\":\""
+                + previousRemarks + "\"}}}}";
+        final var putData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
+
+        // Write a value unique to this test so a stale widget appearance is distinguishable from the source form.
+        final var patchedBytes = RestPdfApi.fillXfaForm(
+                samplePdfBytes, remarksPatch, WriteMode.PATCH, PatchMode.OVERWRITE);
+        assertAcroFormValueAndAppearance(
+                patchedBytes, "form1[0].Page1[0].REMARKS[0]", previousRemarks);
+
+        final var filledBytes = RestPdfApi.fillXfaForm(
+                patchedBytes, putData, WriteMode.PUT, PatchMode.OVERWRITE);
+
+        assertAcroFormValueAndAppearance(
+                filledBytes, "form1[0].Page1[0].REMARKS[0]", "", previousRemarks);
+    }
+
+    @Test
     void fillXfaFormPatchPreservesUnprovidedFields() throws Exception {
         final var samplePdfBytes = readSampleDa4187Pdf();
         final var formData = "{\"data\":{\"form1\":{\"Page1\":{\"SSN\":\"999-99-9999\"}}}}";
@@ -247,6 +268,12 @@ class RestPdfApiTest {
 
     private static void assertAcroFormValueAndAppearance(final byte[] pdfBytes, final String fieldName,
                                                           final String expectedValue) throws Exception {
+        assertAcroFormValueAndAppearance(pdfBytes, fieldName, expectedValue, null);
+    }
+
+    private static void assertAcroFormValueAndAppearance(final byte[] pdfBytes, final String fieldName,
+                                                          final String expectedValue,
+                                                          final String textThatMustNotAppear) throws Exception {
         try (final var reader = new PdfReader(pdfBytes)) {
             final var item = reader.getAcroFields().getFieldItem(fieldName);
             assertTrue(item != null, () -> "Missing AcroForm field " + fieldName);
@@ -254,7 +281,7 @@ class RestPdfApiTest {
             final PdfDictionary value = item.getValue(0);
             final PdfDictionary widget = item.getWidget(0);
             assertAcroFormValue(fieldName, value, expectedValue);
-            assertNormalAppearance(fieldName, widget, expectedValue);
+            assertNormalAppearance(fieldName, widget, expectedValue, textThatMustNotAppear);
         }
     }
 
@@ -267,7 +294,8 @@ class RestPdfApiTest {
     }
 
     private static void assertNormalAppearance(final String fieldName, final PdfDictionary widget,
-                                               final String expectedValue) throws IOException {
+                                               final String expectedValue, final String textThatMustNotAppear)
+            throws IOException {
         assertTrue(widget != null, () -> "Missing widget for " + fieldName);
 
         final var appearanceDictionary = widget.getAsDict(PdfName.AP);
@@ -277,13 +305,19 @@ class RestPdfApiTest {
         final var appearance = assertInstanceOf(PRStream.class, normalAppearance,
                 () -> "Normal appearance is not a stream for " + fieldName);
 
-        if (expectedValue.isEmpty()) {
+        if (expectedValue.isEmpty() && textThatMustNotAppear == null) {
             return;
         }
 
         final var appearanceBytes = PdfReader.getStreamBytes(appearance);
         final var appearanceText = new String(appearanceBytes, StandardCharsets.ISO_8859_1);
-        assertTrue(appearanceText.contains(expectedValue),
-                () -> "Appearance did not contain the expected value for " + fieldName);
+        if (!expectedValue.isEmpty()) {
+            assertTrue(appearanceText.contains(expectedValue),
+                    () -> "Appearance did not contain the expected value for " + fieldName);
+        }
+        if (textThatMustNotAppear != null) {
+            assertFalse(appearanceText.contains(textThatMustNotAppear),
+                    () -> "Appearance still contained stale text for " + fieldName);
+        }
     }
 }
