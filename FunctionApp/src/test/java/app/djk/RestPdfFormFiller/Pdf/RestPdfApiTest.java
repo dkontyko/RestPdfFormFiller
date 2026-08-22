@@ -13,6 +13,7 @@ import org.openpdf.text.pdf.PdfWriter;
 import org.openpdf.text.pdf.PRStream;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -251,24 +252,33 @@ class RestPdfApiTest {
             assertTrue(item != null, () -> "Missing AcroForm field " + fieldName);
 
             final PdfDictionary value = item.getValue(0);
-            assertTrue(value != null, () -> "Missing value dictionary for " + fieldName);
-            final var fieldValue = value.getAsString(PdfName.V);
-            assertTrue(fieldValue != null, () -> "Missing value for " + fieldName);
-            assertEquals(expectedValue, fieldValue.toUnicodeString());
-
             final PdfDictionary widget = item.getWidget(0);
-            assertTrue(widget != null, () -> "Missing widget for " + fieldName);
-            final var appearanceDictionary = widget.getAsDict(PdfName.AP);
-            assertTrue(appearanceDictionary != null, () -> "Missing appearance dictionary for " + fieldName);
-            final var normalAppearance = appearanceDictionary.getAsStream(PdfName.N);
-            final var appearance = assertInstanceOf(PRStream.class, normalAppearance,
-                    () -> "Normal appearance is not a stream for " + fieldName);
-            final var appearanceBytes = PdfReader.getStreamBytes(appearance);
-            final var appearanceText = new String(appearanceBytes, StandardCharsets.ISO_8859_1);
-            if (!expectedValue.isEmpty()) {
-                assertTrue(appearanceText.contains(expectedValue),
-                        () -> "Appearance did not contain the expected value for " + fieldName);
-            }
+            assertAcroFormValue(fieldName, value, expectedValue);
+            assertNormalAppearance(fieldName, widget, expectedValue);
+        }
+    }
+
+    private static void assertAcroFormValue(final String fieldName, final PdfDictionary value,
+                                            final String expectedValue) {
+        assertTrue(value != null, () -> "Missing value dictionary for " + fieldName);
+        final var fieldValue = value.getAsString(PdfName.V);
+        assertTrue(fieldValue != null, () -> "Missing value for " + fieldName);
+        assertEquals(expectedValue, fieldValue.toUnicodeString());
+    }
+
+    private static void assertNormalAppearance(final String fieldName, final PdfDictionary widget,
+                                               final String expectedValue) throws IOException {
+        assertTrue(widget != null, () -> "Missing widget for " + fieldName);
+        final var appearanceDictionary = widget.getAsDict(PdfName.AP);
+        assertTrue(appearanceDictionary != null, () -> "Missing appearance dictionary for " + fieldName);
+        final var normalAppearance = appearanceDictionary.getAsStream(PdfName.N);
+        final var appearance = assertInstanceOf(PRStream.class, normalAppearance,
+                () -> "Normal appearance is not a stream for " + fieldName);
+        final var appearanceBytes = PdfReader.getStreamBytes(appearance);
+        final var appearanceText = new String(appearanceBytes, StandardCharsets.ISO_8859_1);
+        if (!expectedValue.isEmpty()) {
+            assertTrue(appearanceText.contains(expectedValue),
+                    () -> "Appearance did not contain the expected value for " + fieldName);
         }
     }
 }
