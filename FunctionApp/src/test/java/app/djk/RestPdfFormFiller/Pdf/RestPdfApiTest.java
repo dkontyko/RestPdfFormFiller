@@ -269,16 +269,21 @@ class RestPdfApiTest {
     private static void assertNormalAppearance(final String fieldName, final PdfDictionary widget,
                                                final String expectedValue) throws IOException {
         assertTrue(widget != null, () -> "Missing widget for " + fieldName);
+
         final var appearanceDictionary = widget.getAsDict(PdfName.AP);
         assertTrue(appearanceDictionary != null, () -> "Missing appearance dictionary for " + fieldName);
+
         final var normalAppearance = appearanceDictionary.getAsStream(PdfName.N);
         final var appearance = assertInstanceOf(PRStream.class, normalAppearance,
                 () -> "Normal appearance is not a stream for " + fieldName);
+
+        if (expectedValue.isEmpty()) {
+            return;
+        }
+
         final var appearanceBytes = PdfReader.getStreamBytes(appearance);
         final var appearanceText = new String(appearanceBytes, StandardCharsets.ISO_8859_1);
-        if (!expectedValue.isEmpty()) {
-            assertTrue(appearanceText.contains(expectedValue),
-                    () -> "Appearance did not contain the expected value for " + fieldName);
-        }
+        assertTrue(appearanceText.contains(expectedValue),
+                () -> "Appearance did not contain the expected value for " + fieldName);
     }
 }
