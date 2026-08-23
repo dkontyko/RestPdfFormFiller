@@ -28,10 +28,10 @@ public class HttpTriggerFunctions {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
-     * Azure Function that receives a Base64-encoded PDF file and returns the XFA form field data.
+     * Azure Function that receives a raw PDF request body and returns the XFA form field data.
      * This function takes an HTTP POST request. It requires a query parameter of <code>format</code>
      * set to either <code>json</code> or <code>xml</code> for the return format of the form data.
-     * It also requires the request body to have the binary PDF file encoded in base64.
+     * The request body contains the PDF bytes directly; it is not Base64 encoded.
      *
      * @param request Azure Function parameter representing the HTTP request.
      * @param context Azure Function parameter representing the execution context.
