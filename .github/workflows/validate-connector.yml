@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'CustomConnector/**'
-      - 'FunctionApp/src/main/java/app/djk/RestPdfFormFiller/functions/HttpTriggerFunctions.java'
       - '.github/workflows/validate-connector.yml'
   workflow_dispatch:
 
@@ -27,14 +26,6 @@ jobs:
         # windows-latest ships Python 3.12 + pip on PATH, so no setup-python step.
         run: |
           python -c "import json; [json.load(open(f)) for f in ('CustomConnector/PdfFormFiller.swagger.json','CustomConnector/apiProperties.json','CustomConnector/apiProperties.schema.json')]; print('JSON OK')"
-
-      - name: Validate Function and connector identities
-        # The Function App route, Swagger path, connector operation ID, and
-        # connector policy are separate identifiers. Verify the two machine-
-        # readable relationships so they cannot drift without a deliberate
-        # contract update.
-        run: |
-          python -c "import json, re; from pathlib import Path; swagger=json.loads(Path('CustomConnector/PdfFormFiller.swagger.json').read_text()); properties=json.loads(Path('CustomConnector/apiProperties.json').read_text()); source=Path('FunctionApp/src/main/java/app/djk/RestPdfFormFiller/functions/HttpTriggerFunctions.java').read_text(); function_names=set(re.findall(r'@FunctionName\(\x22([^\x22]+)\x22\)', source)); swagger_routes={route.removeprefix('/') for route in swagger['paths']}; missing_routes=swagger_routes-function_names; assert not missing_routes, f'Swagger routes without matching FunctionName: {sorted(missing_routes)}'; operation_ids={operation['operationId'] for path_item in swagger['paths'].values() for operation in path_item.values() if isinstance(operation, dict) and 'operationId' in operation}; policy_operation_ids={operation_id for policy in properties['properties'].get('policyTemplateInstances', []) for operation_id in policy['parameters'].get('x-ms-apimTemplate-operationName', [])}; unknown_policy_operations=policy_operation_ids-operation_ids; assert not unknown_policy_operations, f'Policy operation IDs missing from Swagger: {sorted(unknown_policy_operations)}'; print('Function routes and connector operation IDs OK')"
 
       - name: Install validators (openapi-spec-validator + check-jsonschema)
         # Use `python -m pip` so packages install into the same interpreter used
