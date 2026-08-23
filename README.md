@@ -25,13 +25,7 @@ Given an XFAF PDF form, extracts and returns the datasets node as either XML or 
 Given an XFAF PDF form (same at GetXfaData), returns the basic XML schema of the form.
 
 #### Power Automate PDF input
-The `GetXfaData` and `GetXfaSchema` custom-connector actions send PDF input as `application/octet-stream`. When the file comes from a SharePoint or OneDrive **Get file content** action, pass the `$content` value without its source MIME-type metadata:
-
-```
-base64ToBinary(body('Get_file_content')?['$content'])
-```
-
-Replace `Get_file_content` with the name of your file-content action. Passing the entire file-content object can retain `application/pdf` and prevent the current Java worker from receiving the original PDF bytes.
+The `GetXfaData` and `GetXfaSchema` custom-connector actions apply a request policy that sends PDF input as `application/octet-stream`. When the file comes from a SharePoint or OneDrive **Get file content** action, pass its **File Content** output directly; no conversion expression is required.
 
 ### Fill Form (Not implemented)
 Given a PDF form and a JSON object of field values, returns the PDF form with the given fields containing the values passed in the JSON object.
