@@ -39,7 +39,7 @@ Writes data into an XFA PDF and returns the resulting document as raw
 
 | Field | Required | Behavior |
 | --- | --- | --- |
-| `templateBase64` | Yes | Base64-encoded source XFA PDF. In Power Automate, pass **File Content** directly; the connector encodes it for this field. |
+| `templateBase64` | Yes | Base64-encoded source XFA PDF. In Power Automate, pass **File Content** directly; Power Automate encodes it automatically for this `format: byte` field. |
 | `formData` | Yes | Object containing only a `data` object whose shape matches the form data. |
 | `writeMode` | No | `patch` (default) updates supplied fields and preserves omitted ones. `put` replaces the form data and clears omitted fields. |
 | `patchMode` | No | With `patch`, choose `overwrite` (default), `ifEmpty`, or `failOnConflict`. Do not supply it with `put`. |
