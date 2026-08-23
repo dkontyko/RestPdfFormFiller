@@ -19,10 +19,19 @@ Given an XFAF PDF form, extracts and returns the datasets node as either XML or 
 
 #### Parameters
 * format: Query parameter that must be either "xml" or "json".
-* bodyData: The POST body must be the base64-encoded bytes of the PDF file. For Power Automate, you can use the SharePoint Get file content action and reference body/$content.
+* bodyData: The POST body must contain the raw bytes of the PDF file.
 
 ### GetXfaSchema (HTTP POST)
 Given an XFAF PDF form (same at GetXfaData), returns the basic XML schema of the form.
+
+#### Power Automate PDF input
+The `GetXfaData` and `GetXfaSchema` custom-connector actions send PDF input as `application/octet-stream`. When the file comes from a SharePoint or OneDrive **Get file content** action, pass the `$content` value without its source MIME-type metadata:
+
+```
+base64ToBinary(body('Get_file_content')?['$content'])
+```
+
+Replace `Get_file_content` with the name of your file-content action. Passing the entire file-content object can retain `application/pdf` and prevent the current Java worker from receiving the original PDF bytes.
 
 ### Fill Form (Not implemented)
 Given a PDF form and a JSON object of field values, returns the PDF form with the given fields containing the values passed in the JSON object.

@@ -2,7 +2,7 @@
     "swagger": "2.0",
     "info": {
       "title": "PdfFormFiller",
-      "description": "Fills and reads data from XFA PDF forms. Files are exchanged as raw binary so SharePoint/OneDrive file content can be used directly in Power Automate. (DEV VERSION)",
+      "description": "Fills and reads data from XFA PDF forms. Read actions accept PDF input as application/octet-stream; use the $content value from SharePoint/OneDrive file-content actions in Power Automate. (DEV VERSION)",
       "version": "0.5"
     },
     "host": "restpdfformfiller-dev.azurewebsites.net",
@@ -182,7 +182,7 @@
     "parameters": {
       "pdfContent": {
         "name": "pdfContent",
-        "description": "Raw PDF file content (pass File Content from a SharePoint/OneDrive 'Get file content' action directly).",
+        "description": "Raw PDF file content. In Power Automate, use base64ToBinary(body('<Get file content action>')?['$content']) to pass the content without its source MIME-type metadata.",
         "in": "body",
         "required": true,
         "schema": {
