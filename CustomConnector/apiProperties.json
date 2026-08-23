@@ -6,7 +6,7 @@
                 "uiDefinition": {
                     "displayName": "Azure Functions key",
                     "description": "The Azure Functions key (x-functions-key) for the RestPdfFormFiller Function App. This connector uses function-key authentication.",
-                    "tooltip": "Provide an Azure Functions host or function key",
+                    "tooltip": "Provide an Azure Functions function key or host key",
                     "constraints": {
                         "tabIndex": 2,
                         "clearText": false,

@@ -68,12 +68,24 @@ For example, a patch request has this shape:
 non-empty existing value. Invalid request contracts or non-XFA source PDFs
 return HTTP 400.
 
+### Function routes and connector action IDs
+
+The Function App route names and custom-connector operation IDs are separate
+identifiers. The connector keeps its existing `GetXfaFormSchema` operation ID
+for compatibility, while it calls the `GetXfaSchema` Function App route.
+
+| Function App route | Connector action | Connector operation ID |
+| --- | --- | --- |
+| `POST /api/GetXfaData` | Get XFA Form Data | `GetXfaData` |
+| `POST /api/GetXfaSchema` | Get XFA Form Schema | `GetXfaFormSchema` |
+| `POST /api/FillXfaData` | Fill XFA Form Data | `FillXfaData` |
+
 ## Power Automate flow
 
-The custom connector contains a request policy for `GetXfaData` and
-`GetXfaFormSchema` that sets the outgoing `Content-Type` to
-`application/octet-stream`. Power Platform custom-connector policies run at the
-connector boundary, before the request reaches the backend.
+The custom connector contains a request policy for the `GetXfaData` and
+`GetXfaFormSchema` connector operation IDs. It sets the outgoing `Content-Type`
+to `application/octet-stream`. Power Platform custom-connector policies run at
+the connector boundary, before the request reaches the backend.
 
 1. Use SharePoint or OneDrive **Get file content** to obtain the PDF.
 2. Pass its **File Content** output directly to **Get XFA Form Data** or **Get
